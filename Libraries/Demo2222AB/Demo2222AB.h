@@ -24,10 +24,10 @@
 float Code_to_Voltage(int32_t code, float vref);
 
 //! Send n num of pulses on pin given
-void send_pulses(uint8_t pin, uint8_t sync_pin,uint16_t num_of_pulses);
+void send_pulses(uint8_t pin, uint8_t Sync_pin, uint16_t num_of_pulses);
 
 //! Reads 5 bytes of data on SPI - D31:D0 + W7:W0
-uint32_t Read_32_Bits();
+uint32_t Read_32_Bits(int MCLK);
 
 //! Reads 3 bytes of data with 14bit Signal and 8bit reference Signal
 uint16_t Read_14_Bits();

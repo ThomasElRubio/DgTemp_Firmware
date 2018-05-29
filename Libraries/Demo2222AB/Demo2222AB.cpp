@@ -24,7 +24,7 @@ also make a menu option to choose downsampling-factor DF
 //! Calculates the output voltage from the given digital code and reference voltage
 float Code_to_Voltage(int32_t code, float vref){
 	float voltage;
-  voltage = (float)code / 2147483647 * vref;
+  voltage = ((float)code / 2147483647) * vref;
   return voltage;
 	
 }
@@ -32,42 +32,47 @@ float Code_to_Voltage(int32_t code, float vref){
 
 
 //! Send n num of pulses on pin given
-void send_pulses(uint8_t pin, uint8_t sync_pin,uint16_t num_of_pulses){
+void send_pulses(uint8_t pin ,uint8_t Sync_pin,uint16_t num_of_pulses){
   uint16_t i;
-  output_high(sync_pin);
-  delayMicroseconds(10);
-  output_low(sync_pin);
-  delayMicroseconds(10);
-  output_high(pin);
+  output_high(Sync_pin);
   delayMicroseconds(1);
-  for (i = 0; i < num_of_pulses; ++i)
+  output_low(Sync_pin);
+  digitalWriteFast(pin,HIGH);
+  //delayMicroseconds(10);
+  /*for (i = 0; i < num_of_pulses-1; ++i)
   {
-    digitalWriteFast(pin,LOW);  	// Pull CS low
-	delayMicroseconds(1);
-    digitalWriteFast(pin,HIGH);                     // Pull CS high
-	delayMicroseconds(1);
-  }
-  output_low(pin);
-  delayMicroseconds(1);  
+    digitalWrite(pin,LOW);  	// Pull CS low
+	delayMicroseconds(10);
+    digitalWrite(pin,HIGH);                     // Pull CS high
+	delayMicroseconds(10);
+  }*/
+  //output_low(pin);
+  //delayMicroseconds(10);  
 }
 
 
 
 //! Reads 5 bytes of data on SPI - D31:D0 + W7:W0
-uint32_t Read_32_Bits(){
-	
+uint32_t Read_32_Bits(int MCLK){
+	output_low(MCLK);
 	uint8_t rx[5];
 	uint8_t tx[5] = {0,0,0,0,0};
 	uint32_t code = 0;
 
 	
 	spi_transfer_block(tx, rx, 5);       // Read 5 bytes on SPI port
-
+	//Serial.print(rx[5],HEX);
+	/*Serial.print(rx[4],HEX);
+	Serial.print(rx[3],HEX);
+	Serial.print(rx[2],HEX);
+	Serial.print(rx[1],HEX);*/
+	//Serial.print(rx[0],HEX);
+	//Serial.print(" , ");
 	code = rx[4];
 	code = (code << 8) | rx[3];
 	code = (code << 8) | rx[2];
 	code = (code << 8) | rx[1];
-
+	
 	return code;
 }
 
@@ -103,7 +108,8 @@ void spi_transfer_block(uint8_t *tx, uint8_t *rx, uint8_t data_length){
   for (i=(data_length-1);  i >= 0; i--){
     rx[i] = SPI.transfer(tx[i]);//! 2) Read and send byte array
 	//Serial.println(rx[i], BIN);
-	delayMicroseconds(1);}
+	delayMicroseconds(1);
+	}
   SPI.endTransaction();
 }
 
