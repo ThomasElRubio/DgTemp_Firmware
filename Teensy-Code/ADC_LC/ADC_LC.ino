@@ -23,32 +23,44 @@ bool newSample = false;
 
 void setup(){
   Wire.begin(I2C_MASTER, 0x00, I2C_PINS_18_19, I2C_PULLUP_EXT, 100000);
-  
-  SPI.begin();
-  SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
-  //Enables 16-Bit Mode on the SPI-Bus
-  SPI0_C2 |= 1<<6;
-  
   Serial.begin(115200);
   pinMode(Sync,OUTPUT);
   output_low(Sync);
+  
+  initSpiFifoMode();
     
   sneaker_port_init(Sync,CONFIG_DF_16384);    //Initialisiert den FPGA und damit den Downsampling-Faktor des ADC auf dem Demoboard 2222 AB
 
-  initAdcClock();
+  initAdcClock();     
   enableExternalInterrupt();  //Enables Falling Edge Innterrupt on Pin 2 of the Teensy-LC
 }
 
 void loop(){
-  if(newSample){
+  if(newSample){ 
   Serial.println(Code_to_Voltage(code, ADC_Vref),10);
   newSample = false;
   }
 }
 
 
+void initSpiFifoMode(){
+  SPI1.begin();
+  SPI1.beginTransaction(SPISettings(500000,MSBFIRST, SPI_MODE0));
+  SPI1_C1 &= ~(1<<7); // Disable SPI Interrupts for SPRF, MODF and receive buffer full on FIFOMODE
+  SPI1_C1 = ~(1<<5);  // DIsables Interrupt when Transmit buffer is empty
+  SPI1_C2 |= 1<<6;    //Enables 16-Bit Mode on the SPI-Bus
+  /*Enables FIFOMODE
+   * Transmit nearly empty buffer mark at 32-Bits
+   * Receive Buffer nearly full mark at 32-Bits. This sets the RNFULL Interrupt Flag 
+   * Interrupt Flags are cleared automatically depending on the FIFO-status
+   * Transmit nearly empty Interrupt is disabled
+   * Receive nearly full interrupt is enabled and this interrupt is used to trigger reading the data afet SPI transaction
+   */
+  SPI1_C3 = 0x33;     //Enables FIFOMODE T-FIFO nearly empty at 32 bits
+}
+
+
 void enableExternalInterrupt(){
-  //NVIC_ENABLE_IRQ(IRQ_PORTCD);
   attachInterruptVector(IRQ_PORTCD, portcd_isr);
   
   __disable_irq();
@@ -68,45 +80,37 @@ void enableExternalInterrupt(){
   __enable_irq();
 }
 
+void enableSpiFifoModeInterrupt(){
+  attachInterruptVector(IRQ_SPI1, spi1_isr);
+}
+
+
+
 
 // Interrupt Service Routine for PortD
 void portcd_isr(void){
-  //Clear PORTD Interrupt Register By Writing ones to it
-  PORTD_ISFR = 0xFFFFFFFF;
-  //First read of SPI0_S might be unneccessary
-  SPI0_S;
-  
-  //Writing to the SPI0_DH:DL registers to trigger 16-Bit SPI Transaction
-  SPI0_DH=0x00;
-  SPI0_DL=0x00;
-  
-  // When Bit 7 of SPI0_S equals 0 the transaction is not complete and data can not be read out from the DPI0DH:DL registers
-  while((SPI0_S>>7)==0){}
-  rx3 = SPI0_DH;
-  rx2 = SPI0_DL;
-  
-  //When Bit 7 of SPI0_S equals 1 Data is ready to be read from the SPI0_DH:DL registers.
-  //A new Transaction can only be started if Bit 7 equals 0 again. Otherwise a Write to both Data Registers will be ignored
-  while((SPI0_S>>7)==1){}
+  PORTD_ISFR = 0xFFFFFFFF;    //Clear PORTD Interrupt Register By Writing ones to it
+  SPI1_S;             
+  SPI1_DH = 0x00;
+  SPI1_DL = 0x00;  
+  SPI1_DH = 0x00;
+  SPI1_DL = 0x00;
+}
 
-  //Repeat for the seconds 16-Bit word
-  SPI0_DH=0x00;
-  SPI0_DL=0x00;
-  while((SPI0_S>>7)==0){}
-  SPI0_S;
-  rx1 = SPI0_DH;
-  rx0 = SPI0_DL;
+
+void spi1_isr(void){
+  // TODO: test if clearing Bit 3 on SPI1_C3 improves Timing issues
+  //  By clearing this Bit the Interrupt Flag registry SPI1_CI must be cleared manually
+  rx3 = SPI1_DH;
+  rx2 = SPI1_DL;
+  rx1 = SPI1_DH;
+  rx0 = SPI1_DL;
   code = rx3;
   code = (code<<8) | rx2;
   code = (code<<8) | rx1;
   code = (code<<8) | rx0;
   newSample = true;
- 
-  
- 
- 
 }
-
 
 
 
