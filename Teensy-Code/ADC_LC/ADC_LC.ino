@@ -19,6 +19,7 @@ volatile uint8_t rx0;
 float ADC_Vref = 5.0;
 float Meas_Voltage;
 bool newSample = false;
+int test = 0;
 
 
 void setup(){
@@ -26,62 +27,77 @@ void setup(){
   Serial.begin(115200);
   pinMode(Sync,OUTPUT);
   output_low(Sync);
-  
-  initSpiFifoMode();
-    
   sneaker_port_init(Sync,CONFIG_DF_16384);    //Initialisiert den FPGA und damit den Downsampling-Faktor des ADC auf dem Demoboard 2222 AB
+  
 
-  initAdcClock();     
-  enableExternalInterrupt();  //Enables Falling Edge Innterrupt on Pin 2 of the Teensy-LC
+  initAdcClock();    
+  initSpiFifoMode();
+  enableSpiFifoModeInterrupt();   //Enables interrupt after 32-Bits of Data are in the Receive-FIFO-Buffer and reads it to clear the buffer
+  enableExternalInterrupt();      //Enables Falling-Edge-Interrupt on pin 2 of the Teensy-LC
+  
 }
 
 void loop(){
+  
   if(newSample){ 
-  Serial.println(Code_to_Voltage(code, ADC_Vref),10);
-  newSample = false;
+    Serial.println(Code_to_Voltage(code, ADC_Vref),10);
+    newSample = false;
   }
 }
 
 
 void initSpiFifoMode(){
+  // All Interrupts are disabled
   SPI1.begin();
   SPI1.beginTransaction(SPISettings(500000,MSBFIRST, SPI_MODE0));
-  SPI1_C1 &= ~(1<<7); // Disable SPI Interrupts for SPRF, MODF and receive buffer full on FIFOMODE
-  SPI1_C1 = ~(1<<5);  // DIsables Interrupt when Transmit buffer is empty
-  SPI1_C2 |= 1<<6;    //Enables 16-Bit Mode on the SPI-Bus
+  SPI1_C1 = 0x50;       // Enabling SPI module and configuring it as Master. All Interrupts configured by this register are disabled
+  SPI1_C2 = 0x40;      // Initializes the SPI1_C2 register (0b01000000) to operate in 16-Bit mode and disables Interrupt and DMA requests
+  SPI1_C3 = 0x11;
   /*Enables FIFOMODE
-   * Transmit nearly empty buffer mark at 32-Bits
-   * Receive Buffer nearly full mark at 32-Bits. This sets the RNFULL Interrupt Flag 
+   * Transmit nearly empty buffer mark at 16-Bits(It's not important if this Bit is set or cleared
+   * Receive Buffer nearly full mark at 32-Bits. This sets the RNFULL Interrupt Flag if 32-Bits of data are in the Receive-FIFO-Buffer
    * Interrupt Flags are cleared automatically depending on the FIFO-status
    * Transmit nearly empty Interrupt is disabled
-   * Receive nearly full interrupt is enabled and this interrupt is used to trigger reading the data afet SPI transaction
+   * Receive nearly full interrupt is disabled
    */
-  SPI1_C3 = 0x33;     //Enables FIFOMODE T-FIFO nearly empty at 32 bits
 }
 
 
 void enableExternalInterrupt(){
+
+  /* Manual Version "KL26 Sub-Family Reference Manual, Rev. 3.2, October 2013"
+   *  Pin Control Register (PORTx_PCRn) is found in Chapter 11.5.1 on p.199
+   *  Interrupt Numbers and corresponding isr() are found at https://github.com/PaulStoffregen/cores/blob/master/teensy3/kinetis.h#L285
+   */
+   
   attachInterruptVector(IRQ_PORTCD, portcd_isr);
-  
-  __disable_irq();
-  
+  __disable_irq();  // Disables all Interrupts
+   
   //PORTD_PCR0 is Pin 2 on the Teensy-LC
   //TODO: CHeck in pinMode(2,INPUT) clears bit 0 and 2 of the PORTD_PCR0 register to make code easier to read
   PORTD_PCR0 &= ~(1);
   PORTD_PCR0 &= ~(1<<2);
   PORTD_PCR0 |= 1<<8;
   
-  /*Bits 15-19 on the PCRx_PCRn register are responsible for the Type of Interrupt
-   * 1010 : Falling Edge (Implemented by setting Bit 17 and 19
-   * 
+  /* Bits 15-19 on the PCRx_PCRn register are responsible for the Type of Interrupt
+   * 1010 : Falling Edge Interrupt (Implemented by setting Bit 17 and 19)
    */
   PORTD_PCR0 |= (1<<17); 
   PORTD_PCR0 |= (1<<19); 
-  __enable_irq();
+  __enable_irq();   //Enables Interrupts
 }
 
 void enableSpiFifoModeInterrupt(){
+  /* Manual Version "KL26 Sub-Family Reference Manual, Rev. 3.2, October 2013"
+   * Memory map and register definitions on p.681
+   * Interrupt Numbers and corresponding isr() are found at https://github.com/PaulStoffregen/cores/blob/master/teensy3/kinetis.h#L285
+   */
+
+  __disable_irq();
+  NVIC_ENABLE_IRQ(IRQ_SPI1);
   attachInterruptVector(IRQ_SPI1, spi1_isr);
+  SPI1_C3 |= 1<<1;                                  //Enables Receive-FIFO buffer nearly full at 32-Bits Interrupt
+  __enable_irq();
 }
 
 
@@ -89,8 +105,12 @@ void enableSpiFifoModeInterrupt(){
 
 // Interrupt Service Routine for PortD
 void portcd_isr(void){
-  PORTD_ISFR = 0xFFFFFFFF;    //Clear PORTD Interrupt Register By Writing ones to it
-  SPI1_S;             
+  PORTD_ISFR = 0xFFFFFFFF;                          //Clear PORTD Interrupt Register By Writing ones to it. PORTx_ISFR defintion is found on p.202-203
+  
+  /* SPI Memory map and register definitions on p.681
+   * SPI-Transaction is triggered by reading the status register SPI1_S and writing to the Data Registers SPI1_DH:DL
+   */
+  SPI1_S;                                           
   SPI1_DH = 0x00;
   SPI1_DL = 0x00;  
   SPI1_DH = 0x00;
@@ -100,7 +120,10 @@ void portcd_isr(void){
 
 void spi1_isr(void){
   // TODO: test if clearing Bit 3 on SPI1_C3 improves Timing issues
-  //  By clearing this Bit the Interrupt Flag registry SPI1_CI must be cleared manually
+  // By clearing this Bit the Interrupt Flag registry SPI1_CI must be cleared manually
+  // Uncomment the next line if SPI1_C3_INTCLR is set to 1
+  //SPI1_CI=0xF; 
+  SPI1_S;
   rx3 = SPI1_DH;
   rx2 = SPI1_DL;
   rx1 = SPI1_DH;
@@ -122,11 +145,11 @@ void TpmCntEnable(bool Enable){
   if (Enable){
     TPM1_SC &= ~(1<<4);      // Clears Bit 4 [CMOD]
     TPM1_SC |= 1<<3;         // Sets Bit 3 to 1 [CMOD] --> [CMOD]=0b01 TPM counter increments on every TPM counter clock
-   }
+  }
   else{
     TPM1_SC &= ~(1<<4);       // Clears Bit 4 [CMOD]
     TPM1_SC &= ~(1<<3);      // Clears Bit 3 [CMOD]
-   }
+  }
 }
 
 void initAdcClock(){
@@ -178,7 +201,7 @@ void initAdcClock(){
    
    TpmCntEnable(true);
 
-   //Select Alt3 for Pin 16 to get TPM1_CH0
+   //Select Alt3 for Pin 16 to get TPM1_CH0 p.177
    PORTB_PCR0 &= ~(1<<10);  //Clear Bit 10 
    PORTB_PCR0 |= 1<<9;  //Sets Bit 9 to 1
    PORTB_PCR0 |= 1<<8;  // Sets Bit 8 to 1
