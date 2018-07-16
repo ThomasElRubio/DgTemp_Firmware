@@ -1,48 +1,108 @@
-#include <i2c_t3.h>
-#include <Demo2222AB.h>
 #include <SPI.h>
-#include <AD5760.h>
+#include "src/AD5760/AD5760.h"
 
 
 
+#define invertPin      13
+#define nonInvertPin   14
+#define CS_DAC      15
+#define Sync        18
+AD5760 DAC(CS_DAC);
 
 
+/*switch Truth-Table:
+ * 00: Inverted
+ * 11: Non-Inverted
+ * 01: Shorted
+ * 10: Shorted
+ */
 
-#define Sync        6
 
-
+uint16_t DAC_INIT_Voltage = 0xFA0;  //
+uint16_t DAC_Setpoint = 0x0000;
 volatile uint32_t code;
 volatile uint8_t rx3;
 volatile uint8_t rx2;
 volatile uint8_t rx1;
 volatile uint8_t rx0;
-float ADC_Vref = 5.0;
-float Meas_Voltage;
+uint8_t temp;
+int dataCounter = 0;
+float value;
+float ADC_Vref = 4.096;
 bool newSample = false;
-int test = 0;
+bool Inverted = false;
+IntervalTimer InvertTimer;
+
+
+
 
 
 void setup(){
-  Wire.begin(I2C_MASTER, 0x00, I2C_PINS_18_19, I2C_PULLUP_EXT, 100000);
   Serial.begin(115200);
   pinMode(Sync,OUTPUT);
-  output_low(Sync);
-  sneaker_port_init(Sync,CONFIG_DF_16384);    //Initialisiert den FPGA und damit den Downsampling-Faktor des ADC auf dem Demoboard 2222 AB
+  digitalWrite(Sync,LOW);
+  pinMode(nonInvertPin, OUTPUT);
+  pinMode(invertPin,OUTPUT);
+  digitalWrite(nonInvertPin,HIGH);
+  digitalWrite(invertPin,HIGH);
   
-
-  initAdcClock();    
+  SPI1.begin();
+  
+  DAC.begin();    //Initialisiert den CS-Pin des DAC als Output und setzt ihn High
+  
+  delay(500);
+  DAC.reset();    // Führt enableOutput() aus.
+  DAC.enableOutput();   // Redundant und kann gestrichen werden
+  DAC.setValue(0xFA0);   // DAC Setpoint wird festgelegt.
+  delay(1000);
+  initAdcClock();
   initSpiFifoMode();
   enableSpiFifoModeInterrupt();   //Enables interrupt after 32-Bits of Data are in the Receive-FIFO-Buffer and reads it to clear the buffer
   enableExternalInterrupt();      //Enables Falling-Edge-Interrupt on pin 2 of the Teensy-LC
-  
+  //InvertTimer.begin(InvertCurrent,5000000); //Call InvertCurrent function which also sends a Sync-Pulse to the ADC and a Trigger for the Multimeter HP3458
 }
 
-void loop(){
-  
-  if(newSample){ 
-    Serial.println(Code_to_Voltage(code, ADC_Vref),10);
-    newSample = false;
+
+void InvertCurrent(){
+  digitalWriteFast(Sync,HIGH);
+  switch(Inverted) {
+    case false: 
+        digitalWriteFast(invertPin,HIGH); 
+        digitalWriteFast(nonInvertPin,HIGH);
+        Inverted=true;
+        break;
+    case true: 
+        digitalWriteFast(invertPin,LOW); 
+        digitalWriteFast(nonInvertPin,LOW);
+        Inverted = false;
+        break;
   }
+  digitalWriteFast(Sync,LOW);
+}
+
+
+void loop(){
+  while (Serial.available()) {
+    Serial.read();
+  }
+  if(newSample) { 
+    Serial.print(Code_to_Voltage(code, ADC_Vref), 10);
+    Serial.print("\n");
+    newSample = false;
+    dataCounter+=1;
+    
+  }
+  if(dataCounter==5007) {
+    InvertCurrent();  
+    dataCounter=0;
+  }
+}
+
+float Code_to_Voltage(int32_t code, float vref){
+  float voltage;
+  voltage = ((float)code / 2147483647) * vref;
+  return voltage;
+  
 }
 
 
@@ -145,11 +205,11 @@ void TpmCntEnable(bool Enable){
   if (Enable){
     TPM1_SC &= ~(1<<4);      // Clears Bit 4 [CMOD]
     TPM1_SC |= 1<<3;         // Sets Bit 3 to 1 [CMOD] --> [CMOD]=0b01 TPM counter increments on every TPM counter clock
-  }
+   }
   else{
     TPM1_SC &= ~(1<<4);       // Clears Bit 4 [CMOD]
     TPM1_SC &= ~(1<<3);      // Clears Bit 3 [CMOD]
-  }
+   }
 }
 
 void initAdcClock(){
@@ -177,7 +237,7 @@ void initAdcClock(){
    TPM1_SC &= ~(1<<5);      // TPM counter operates in up counting mode
    TPM1_SC &= ~(111);       // Clears Bit 0-2 and therefor sets the Prescale Factor to 1
    TPM1_CNT = 0;            // Resetting the Counter Register to clear Counter
-   TPM1_MOD =  0x2F;        // Setting MOD to 47 to reset counter when it reaches 47 after 48 Cycles
+   TPM1_MOD =  48*1-1;        // Setting MOD to 47 to reset counter when it reaches 47 after 48 Cycles
    
 
    /*
@@ -207,6 +267,12 @@ void initAdcClock(){
    PORTB_PCR0 |= 1<<8;  // Sets Bit 8 to 1
    
 }
+
+
+
+
+  
+
 
 
 

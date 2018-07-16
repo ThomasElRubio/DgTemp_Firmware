@@ -17,13 +17,13 @@
 #define AD5760_SPI_CLOCK_FREQ (1*1000*120)   // 30 MHz SPI clock is the maximum specified
 // Use CPOL = 0,  CPHA =1 for ADI DACs
 
-AD5760::AD5760(uint8_t cs_pin) : cs_pin(cs_pin), spi_settings(SPISettings(AD5760_SPI_CLOCK_FREQ, MSBFIRST, SPI_MODE1)) {
+AD5760::AD5760(uint8_t cs_pin) : cs_pin(cs_pin), spi_settings(SPISettings(500000, MSBFIRST, SPI_MODE1)) {
 }
 
 
 // TODO: use an SPI object to select the SPI bus
 void AD5760::writeSPI(uint32_t value) {
-  SPI.beginTransaction(this->spi_settings);
+  SPI1.beginTransaction(this->spi_settings);
 
   digitalWrite (this->cs_pin, LOW);
   delayMicroseconds(10);
@@ -33,16 +33,16 @@ void AD5760::writeSPI(uint32_t value) {
   Serial.println(value, BIN);
   #endif
   
-  SPI.transfer((value >> 16) & 0xFF);
+  SPI1.transfer((value >> 16) & 0xFF);
   delayMicroseconds(4);
-  SPI.transfer((value >> 8) & 0xFF);
+  SPI1.transfer((value >> 8) & 0xFF);
   delayMicroseconds(4);
-  SPI.transfer((value >> 0) & 0xFF);
+  SPI1.transfer((value >> 0) & 0xFF);
   delayMicroseconds(10);
 
   digitalWrite(this->cs_pin, HIGH);
   delayMicroseconds(10);
-  SPI.endTransaction();
+  SPI1.endTransaction();
 }
 
 void AD5760::readRegister(uint32_t value){
@@ -148,6 +148,7 @@ void AD5760::setReferenceInputRange(bool enableCompensation) {
 void AD5760::begin() {
   pinMode(this->cs_pin, OUTPUT);
   digitalWrite(this->cs_pin, HIGH);
+  //TODO: add a delay after Setting CS_PIN.
   //this->setOffsetBinaryEncoding(true);
   //this->updateControlRegister();
 
