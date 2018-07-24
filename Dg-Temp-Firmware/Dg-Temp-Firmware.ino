@@ -1,13 +1,11 @@
 #include <SPI.h>
 #include "src/AD5760/AD5760.h"
 
-
-
 #define invertPin      13
 #define nonInvertPin   14
 #define CS_DAC      15
 #define Sync        18
-AD5760 DAC(CS_DAC);
+AD5760 dac(CS_DAC);
 
 
 /*switch Truth-Table:
@@ -18,22 +16,13 @@ AD5760 DAC(CS_DAC);
  */
 
 
-uint16_t DAC_INIT_Voltage = 0xFA0;  //
-uint16_t DAC_Setpoint = 0x0000;
 volatile uint32_t code;
 volatile uint8_t rx3;
 volatile uint8_t rx2;
 volatile uint8_t rx1;
 volatile uint8_t rx0;
-uint8_t temp;
-float value;
-float ADC_Vref = 4.096;
-bool newSample = false;
-IntervalTimer InvertTimer;
-
-
-
-
+float ADC_V_REF = 4.096;
+volatile bool newSample = false;
 
 void setup(){
   Serial.begin(115200);
@@ -41,17 +30,16 @@ void setup(){
   digitalWrite(Sync,LOW);
   pinMode(nonInvertPin, OUTPUT);
   pinMode(invertPin,OUTPUT);
-  digitalWrite(nonInvertPin,HIGH);
-  digitalWrite(invertPin,HIGH);
-  
+  digitalWrite(nonInvertPin,LOW);
+  digitalWrite(invertPin,LOW);
+
   SPI1.begin();
   
-  DAC.begin();    //Initialisiert den CS-Pin des DAC als Output und setzt ihn High
   
   delay(500);
-  DAC.reset();    // Führt enableOutput() aus.
-  DAC.enableOutput();   // Redundant und kann gestrichen werden
-  DAC.setValue(0xFA0);   // DAC Setpoint wird festgelegt.
+  dac.reset();    // Führt enableOutput() aus.
+  dac.enableOutput();   // Redundant und kann gestrichen werden
+  dac.setValue(0xFA0);   // DAC Setpoint wird festgelegt.
   delay(1000);
   initAdcClock();
   initSpiFifoMode();
@@ -76,10 +64,10 @@ void loop(){
     Serial.read();
   }
 
-  static bool inverted = false;
+  static bool inverted = false;   // Note: Make sure that this value corresponds to the intial value of the output pins
   static uint32_t dataCounter = 0;
   if(newSample) {
-    Serial.print(Code_to_Voltage(code, ADC_Vref), 10);
+    Serial.print(codeToVoltage(code, ADC_V_REF), 10);
     Serial.print(",");
     Serial.print(inverted);
     Serial.print("\n");
@@ -94,7 +82,7 @@ void loop(){
   }
 }
 
-float Code_to_Voltage(int32_t code, float vref){
+float codeToVoltage(int32_t code, float vref){
   float voltage;
   voltage = ((float)code / 2147483647) * vref;
   return voltage;
@@ -263,12 +251,3 @@ void initAdcClock(){
    PORTB_PCR0 |= 1<<8;  // Sets Bit 8 to 1
    
 }
-
-
-
-
-  
-
-
-
-
