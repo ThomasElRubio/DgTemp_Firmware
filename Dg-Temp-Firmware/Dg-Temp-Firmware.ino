@@ -71,9 +71,9 @@ void loop() {
 
   }
   if(dataCounter==5007) {
-    invertCurrent(inverted);  
     dataCounter=0;
     inverted = !inverted;
+    invertCurrent(inverted);  
   }
 }
 
