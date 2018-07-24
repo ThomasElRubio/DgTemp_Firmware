@@ -1,10 +1,10 @@
 #include <SPI.h>
 #include "src/AD5760/AD5760.h"
 
-#define invertPin      13
-#define nonInvertPin   14
+#define INVERT_PIN      13
+#define NON_INVERT_PIN   14
 #define CS_DAC      15
-#define Sync        18
+#define SYNC_PIN        18
 AD5760 dac(CS_DAC);
 
 /*switch Truth-Table:
@@ -19,17 +19,17 @@ volatile uint8_t rx3;
 volatile uint8_t rx2;
 volatile uint8_t rx1;
 volatile uint8_t rx0;
-float ADC_V_REF = 4.096;
+const float ADC_V_REF = 4.096;
 volatile bool newSample = false;
 
-void setup(){
+void setup() {
   Serial.begin(115200);
-  pinMode(Sync, OUTPUT);
-  digitalWrite(Sync, LOW);
-  pinMode(nonInvertPin, OUTPUT);
-  pinMode(invertPin, OUTPUT);
-  digitalWrite(nonInvertPin, LOW);
-  digitalWrite(invertPin, LOW);
+  pinMode(SYNC_PIN, OUTPUT);
+  digitalWrite(SYNC_PIN, LOW);
+  pinMode(NON_INVERT_PIN, OUTPUT);
+  pinMode(INVERT_PIN, OUTPUT);
+  digitalWrite(NON_INVERT_PIN, LOW);
+  digitalWrite(INVERT_PIN, LOW);
 
   SPI1.begin();
 
@@ -45,16 +45,16 @@ void setup(){
   //InvertTimer.begin(InvertCurrent, 5000000); //Call InvertCurrent function which also sends a Sync-Pulse to the ADC and a Trigger for the Multimeter HP3458
 }
 
-void invertCurrent(const bool inverted){
-  digitalWriteFast(Sync, HIGH);
+void invertCurrent(const bool inverted) {
+  digitalWriteFast(SYNC_PIN, HIGH);
 
-  digitalWriteFast(invertPin, inverted); 
-  digitalWriteFast(nonInvertPin, inverted);
+  digitalWriteFast(INVERT_PIN, inverted); 
+  digitalWriteFast(NON_INVERT_PIN, inverted);
 
-  digitalWriteFast(Sync, LOW);
+  digitalWriteFast(SYNC_PIN, LOW);
 }
 
-void loop(){
+void loop() {
   while (Serial.available()) {
     Serial.read();
   }
@@ -77,13 +77,13 @@ void loop(){
   }
 }
 
-float codeToVoltage(int32_t code, float vref){
+float codeToVoltage(int32_t code, float vref) {
   float voltage;
   voltage = ((float)code / 2147483647) * vref;
   return voltage;
 }
 
-void initSpiFifoMode(){
+void initSpiFifoMode() {
   // All Interrupts are disabled
   SPI1.begin();
   SPI1.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
@@ -99,13 +99,11 @@ void initSpiFifoMode(){
    */
 }
 
-void enableExternalInterrupt(){
-
+void enableExternalInterrupt() {
   /* Manual Version "KL26 Sub-Family Reference Manual, Rev. 3.2, October 2013"
    *  Pin Control Register (PORTx_PCRn) is found in Chapter 11.5.1 on p.199
    *  Interrupt Numbers and corresponding isr() are found at https://github.com/PaulStoffregen/cores/blob/master/teensy3/kinetis.h#L285
    */
-
   attachInterruptVector(IRQ_PORTCD, portcd_isr);
   __disable_irq();  // Disables all Interrupts
 
@@ -123,12 +121,11 @@ void enableExternalInterrupt(){
   __enable_irq();   //Enables Interrupts
 }
 
-void enableSpiFifoModeInterrupt(){
+void enableSpiFifoModeInterrupt() {
   /* Manual Version "KL26 Sub-Family Reference Manual, Rev. 3.2, October 2013"
    * Memory map and register definitions on p.681
    * Interrupt Numbers and corresponding isr() are found at https://github.com/PaulStoffregen/cores/blob/master/teensy3/kinetis.h#L285
    */
-
   __disable_irq();
   NVIC_ENABLE_IRQ(IRQ_SPI1);
   attachInterruptVector(IRQ_SPI1, spi1_isr);
@@ -137,7 +134,7 @@ void enableSpiFifoModeInterrupt(){
 }
 
 // Interrupt Service Routine for PortD
-void portcd_isr(void){
+void portcd_isr(void) {
   PORTD_ISFR = 0xFFFFFFFF;                          //Clear PORTD Interrupt Register By Writing ones to it. PORTx_ISFR defintion is found on p.202-203
 
   /* SPI Memory map and register definitions on p.681
@@ -150,7 +147,7 @@ void portcd_isr(void){
   SPI1_DL = 0x00;
 }
 
-void spi1_isr(void){
+void spi1_isr(void) {
   // TODO: test if clearing Bit 3 on SPI1_C3 improves Timing issues
   // By clearing this Bit the Interrupt Flag registry SPI1_CI must be cleared manually
   // Uncomment the next line if SPI1_C3_INTCLR is set to 1
@@ -167,7 +164,7 @@ void spi1_isr(void){
   newSample = true;
 }
 
-void TpmCntEnable(bool Enable){
+void TpmCntEnable(bool Enable) {
   if (Enable){
     TPM1_SC &= ~(1<<4);      // Clears Bit 4 [CMOD]
     TPM1_SC |= 1<<3;         // Sets Bit 3 to 1 [CMOD] --> [CMOD]=0b01 TPM counter increments on every TPM counter clock
@@ -178,8 +175,7 @@ void TpmCntEnable(bool Enable){
    }
 }
 
-void initAdcClock(){
-  
+void initAdcClock() {
   /* Manual Version "KL26 Sub-Family Reference Manual, Rev. 3.2, October 2013"
    * TPM Clocks are listed on p. 135 in figure 5-5.
    * MCGFLLCLK goes up to 48Mhz
@@ -229,5 +225,4 @@ void initAdcClock(){
    PORTB_PCR0 &= ~(1<<10);  //Clear Bit 10 
    PORTB_PCR0 |= 1<<9;  //Sets Bit 9 to 1
    PORTB_PCR0 |= 1<<8;  // Sets Bit 8 to 1
-   
 }
