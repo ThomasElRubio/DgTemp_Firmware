@@ -7,14 +7,12 @@
 #define Sync        18
 AD5760 dac(CS_DAC);
 
-
 /*switch Truth-Table:
- * 00: Inverted
- * 11: Non-Inverted
+ * 00: Non-Inverted
+ * 11: Shorted
  * 01: Shorted
- * 10: Shorted
+ * 10: Inverted
  */
-
 
 volatile uint32_t code;
 volatile uint8_t rx3;
@@ -26,16 +24,15 @@ volatile bool newSample = false;
 
 void setup(){
   Serial.begin(115200);
-  pinMode(Sync,OUTPUT);
-  digitalWrite(Sync,LOW);
+  pinMode(Sync, OUTPUT);
+  digitalWrite(Sync, LOW);
   pinMode(nonInvertPin, OUTPUT);
-  pinMode(invertPin,OUTPUT);
-  digitalWrite(nonInvertPin,LOW);
-  digitalWrite(invertPin,LOW);
+  pinMode(invertPin, OUTPUT);
+  digitalWrite(nonInvertPin, LOW);
+  digitalWrite(invertPin, LOW);
 
   SPI1.begin();
-  
-  
+
   delay(500);
   dac.reset();    // Führt enableOutput() aus.
   dac.enableOutput();   // Redundant und kann gestrichen werden
@@ -45,19 +42,17 @@ void setup(){
   initSpiFifoMode();
   enableSpiFifoModeInterrupt();   //Enables interrupt after 32-Bits of Data are in the Receive-FIFO-Buffer and reads it to clear the buffer
   enableExternalInterrupt();      //Enables Falling-Edge-Interrupt on pin 2 of the Teensy-LC
-  //InvertTimer.begin(InvertCurrent,5000000); //Call InvertCurrent function which also sends a Sync-Pulse to the ADC and a Trigger for the Multimeter HP3458
+  //InvertTimer.begin(InvertCurrent, 5000000); //Call InvertCurrent function which also sends a Sync-Pulse to the ADC and a Trigger for the Multimeter HP3458
 }
 
+void invertCurrent(const bool inverted){
+  digitalWriteFast(Sync, HIGH);
 
-void invertCurrent(bool inverted){
-  digitalWriteFast(Sync,HIGH);
+  digitalWriteFast(invertPin, inverted); 
+  digitalWriteFast(nonInvertPin, inverted);
 
-  digitalWriteFast(invertPin,inverted); 
-  digitalWriteFast(nonInvertPin,inverted);
-
-  digitalWriteFast(Sync,LOW);
+  digitalWriteFast(Sync, LOW);
 }
-
 
 void loop(){
   while (Serial.available()) {
@@ -73,7 +68,7 @@ void loop(){
     Serial.print("\n");
     newSample = false;
     dataCounter+=1;
-    
+
   }
   if(dataCounter==5007) {
     invertCurrent(inverted);  
@@ -86,14 +81,12 @@ float codeToVoltage(int32_t code, float vref){
   float voltage;
   voltage = ((float)code / 2147483647) * vref;
   return voltage;
-  
 }
-
 
 void initSpiFifoMode(){
   // All Interrupts are disabled
   SPI1.begin();
-  SPI1.beginTransaction(SPISettings(500000,MSBFIRST, SPI_MODE0));
+  SPI1.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
   SPI1_C1 = 0x50;       // Enabling SPI module and configuring it as Master. All Interrupts configured by this register are disabled
   SPI1_C2 = 0x40;      // Initializes the SPI1_C2 register (0b01000000) to operate in 16-Bit mode and disables Interrupt and DMA requests
   SPI1_C3 = 0x11;
@@ -106,23 +99,22 @@ void initSpiFifoMode(){
    */
 }
 
-
 void enableExternalInterrupt(){
 
   /* Manual Version "KL26 Sub-Family Reference Manual, Rev. 3.2, October 2013"
    *  Pin Control Register (PORTx_PCRn) is found in Chapter 11.5.1 on p.199
    *  Interrupt Numbers and corresponding isr() are found at https://github.com/PaulStoffregen/cores/blob/master/teensy3/kinetis.h#L285
    */
-   
+
   attachInterruptVector(IRQ_PORTCD, portcd_isr);
   __disable_irq();  // Disables all Interrupts
-   
+
   //PORTD_PCR0 is Pin 2 on the Teensy-LC
   //TODO: CHeck in pinMode(2,INPUT) clears bit 0 and 2 of the PORTD_PCR0 register to make code easier to read
   PORTD_PCR0 &= ~(1);
   PORTD_PCR0 &= ~(1<<2);
   PORTD_PCR0 |= 1<<8;
-  
+
   /* Bits 15-19 on the PCRx_PCRn register are responsible for the Type of Interrupt
    * 1010 : Falling Edge Interrupt (Implemented by setting Bit 17 and 19)
    */
@@ -144,13 +136,10 @@ void enableSpiFifoModeInterrupt(){
   __enable_irq();
 }
 
-
-
-
 // Interrupt Service Routine for PortD
 void portcd_isr(void){
   PORTD_ISFR = 0xFFFFFFFF;                          //Clear PORTD Interrupt Register By Writing ones to it. PORTx_ISFR defintion is found on p.202-203
-  
+
   /* SPI Memory map and register definitions on p.681
    * SPI-Transaction is triggered by reading the status register SPI1_S and writing to the Data Registers SPI1_DH:DL
    */
@@ -160,7 +149,6 @@ void portcd_isr(void){
   SPI1_DH = 0x00;
   SPI1_DL = 0x00;
 }
-
 
 void spi1_isr(void){
   // TODO: test if clearing Bit 3 on SPI1_C3 improves Timing issues
@@ -179,12 +167,6 @@ void spi1_isr(void){
   newSample = true;
 }
 
-
-
-
-
-
-  
 void TpmCntEnable(bool Enable){
   if (Enable){
     TPM1_SC &= ~(1<<4);      // Clears Bit 4 [CMOD]
@@ -222,7 +204,6 @@ void initAdcClock(){
    TPM1_SC &= ~(111);       // Clears Bit 0-2 and therefor sets the Prescale Factor to 1
    TPM1_CNT = 0;            // Resetting the Counter Register to clear Counter
    TPM1_MOD =  48*1-1;        // Setting MOD to 47 to reset counter when it reaches 47 after 48 Cycles
-   
 
    /*
     * TPM1_C0SC must be initialized to Edge-aligned PWM
@@ -238,11 +219,10 @@ void initAdcClock(){
    TPM1_C0SC &= ~(1<<2);  //ELSA set to 0 --> MSB:MSA=1:0 and ELSB:ELSA = 1:0 enables Edge aligned PWM
    TPM1_C0SC |= 1;        // Enables DMA for Chanel Interrupt
 
-
    TPM1_CONF &= ~(1<<9);  //Sets GTBEEN to 0 an enables internally generated TPM counter as timebase
    TPM1_CONF &= ~(1<<16); // TPM counter start immediately once enabled
    TPM1_CONF &= ~(1<<17); // Counter continues incrementing after overflow
-   
+
    TpmCntEnable(true);
 
    //Select Alt3 for Pin 16 to get TPM1_CH0 p.177
