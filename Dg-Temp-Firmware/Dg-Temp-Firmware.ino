@@ -26,11 +26,9 @@ volatile uint8_t rx2;
 volatile uint8_t rx1;
 volatile uint8_t rx0;
 uint8_t temp;
-int dataCounter = 0;
 float value;
 float ADC_Vref = 4.096;
 bool newSample = false;
-bool Inverted = false;
 IntervalTimer InvertTimer;
 
 
@@ -63,20 +61,12 @@ void setup(){
 }
 
 
-void InvertCurrent(){
+void invertCurrent(bool inverted){
   digitalWriteFast(Sync,HIGH);
-  switch(Inverted) {
-    case false: 
-        digitalWriteFast(invertPin,HIGH); 
-        digitalWriteFast(nonInvertPin,HIGH);
-        Inverted=true;
-        break;
-    case true: 
-        digitalWriteFast(invertPin,LOW); 
-        digitalWriteFast(nonInvertPin,LOW);
-        Inverted = false;
-        break;
-  }
+
+  digitalWriteFast(invertPin,inverted); 
+  digitalWriteFast(nonInvertPin,inverted);
+
   digitalWriteFast(Sync,LOW);
 }
 
@@ -85,16 +75,22 @@ void loop(){
   while (Serial.available()) {
     Serial.read();
   }
-  if(newSample) { 
+
+  static bool inverted = false;
+  static uint32_t dataCounter = 0;
+  if(newSample) {
     Serial.print(Code_to_Voltage(code, ADC_Vref), 10);
+    Serial.print(",");
+    Serial.print(inverted);
     Serial.print("\n");
     newSample = false;
     dataCounter+=1;
     
   }
   if(dataCounter==5007) {
-    InvertCurrent();  
+    invertCurrent(inverted);  
     dataCounter=0;
+    inverted = !inverted;
   }
 }
 
