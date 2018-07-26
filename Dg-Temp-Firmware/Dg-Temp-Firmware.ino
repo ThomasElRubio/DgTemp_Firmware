@@ -62,13 +62,12 @@ void loop() {
   static bool inverted = false;   // Note: Make sure that this value corresponds to the intial value of the output pins
   static uint32_t dataCounter = 0;
   if(newSample) {
-    Serial.print(codeToVoltage(code, ADC_V_REF), 10);
+    Serial.print(code);
     Serial.print(",");
     Serial.print(inverted);
     Serial.print("\n");
     newSample = false;
     dataCounter+=1;
-
   }
   if(dataCounter==5007) {
     dataCounter=0;
