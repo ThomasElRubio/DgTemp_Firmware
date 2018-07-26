@@ -2,8 +2,8 @@
 #include "src/AD5760/AD5760.h"
 
 #define INVERT_PIN      13
-#define NON_INVERT_PIN   14
-#define CS_DAC      15
+#define NON_INVERT_PIN  14
+#define CS_DAC          15
 #define SYNC_PIN        18
 AD5760 dac(CS_DAC);
 
@@ -62,7 +62,7 @@ void loop() {
   static bool inverted = false;   // Note: Make sure that this value corresponds to the intial value of the output pins
   static uint32_t dataCounter = 0;
   if(newSample) {
-    Serial.print(code);
+    Serial.print((int32_t)code);
     Serial.print(",");
     Serial.print(inverted);
     Serial.print("\n");
