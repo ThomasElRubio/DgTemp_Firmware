@@ -30,6 +30,7 @@ void setup() {
   pinMode(INVERT_PIN, OUTPUT);
   digitalWrite(NON_INVERT_PIN, LOW);
   digitalWrite(INVERT_PIN, LOW);
+  dac.begin();    // initialize the DAC pins
 
   SPI1.begin();
 
@@ -65,6 +66,8 @@ void loop() {
     Serial.print((int32_t)code);
     Serial.print(",");
     Serial.print(inverted);
+    //Serial.print(",");
+    // Serial.print(codeToVoltage(code, ADC_V_REF));
     Serial.print("\n");
     newSample = false;
     dataCounter+=1;
@@ -76,10 +79,8 @@ void loop() {
   }
 }
 
-float codeToVoltage(int32_t code, float vref) {
-  float voltage;
-  voltage = ((float)code / 2147483647) * vref;
-  return voltage;
+float codeToVoltage(const int32_t code, const float vref) {
+  return ((float)code / 2147483647) * vref;
 }
 
 void initSpiFifoMode() {
