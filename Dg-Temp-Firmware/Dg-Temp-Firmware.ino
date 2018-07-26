@@ -138,6 +138,8 @@ void portcd_isr(void) {
 
   /* SPI Memory map and register definitions on p.681
    * SPI-Transaction is triggered by reading the status register SPI1_S and writing to the Data Registers SPI1_DH:DL
+   * The SPI-bus operates in 16-Bit Mode. Therefore writes to the DataHigh (DH) and the DataLow(DL) is needed to start a transaction.
+   * Since FIFO-Mode is enabled the SPI has 64-Bits which are filled by writing to the SPI1_DH:DL registers multiple times.
    */
   SPI1_S;                                           
   SPI1_DH = 0x00;
@@ -152,6 +154,10 @@ void spi1_isr(void) {
   // Uncomment the next line if SPI1_C3_INTCLR is set to 1
   //SPI1_CI=0xF; 
   SPI1_S;
+  /* The SPI-bus operates in 16-Bit Mode. Therefore reads from the DataHigh (DH) and the DataLow(DL) is needed to clear those registers and enable the SPI-Bus
+   * to start a new transaction by writing to the same registers.
+   * Since FIFO-Mode is enabled the SPI has 64-Bits which are cleared by multiple reads from the SPI1_DH:DL registers.
+   */
   rx3 = SPI1_DH;
   rx2 = SPI1_DL;
   rx1 = SPI1_DH;
