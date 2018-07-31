@@ -48,8 +48,8 @@ void setup() {
 
 void invertCurrent(const bool inverted) {
   digitalWriteFast(SYNC_PIN, HIGH);
-  //digitalWriteFast(INVERT_PIN, inverted); 
-  //digitalWriteFast(NON_INVERT_PIN, inverted);
+  digitalWriteFast(INVERT_PIN, inverted); 
+  digitalWriteFast(NON_INVERT_PIN, inverted);
   digitalWriteFast(SYNC_PIN, LOW);
 }
 
