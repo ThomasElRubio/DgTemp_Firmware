@@ -213,7 +213,7 @@ void initAdcClock() {
     * TPM1_POL Bit 0 and 1 controll polarity of channel 0 and 1 with 0=active high
     * TPM1_CONF check init later Counter Pause(0),Reload(1), Stop(1) or Start (0) on Trigger, GTBEEN(0),
     */
-   TPM1_C0V = 0x3;        // If C0V == Counter match occurs an Channel Interrupt Flag.
+   TPM1_C0V = 0x1;        // If C0V == Counter match occurs an Channel Interrupt Flag. Minimum High-Time for the LTC2508 MCLK is 20 ns
    TPM1_C0SC |= 1<<6;     // Enables Channel Interrupt
    TPM1_C0SC |= 1<<5;     //MSB set to 1
    TPM1_C0SC &= ~(1<<4);  //MSA set to 0  
