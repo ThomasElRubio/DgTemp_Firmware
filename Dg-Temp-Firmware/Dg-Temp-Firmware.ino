@@ -37,7 +37,7 @@ void setup() {
   delay(500);
   dac.reset();    // Führt enableOutput() aus.
   dac.enableOutput();   // Redundant und kann gestrichen werden
-  dac.setValue(0xFA0);   // DAC Setpoint wird festgelegt.
+  dac.setValue(40140);   // DAC Setpoint wird festgelegt.
   delay(1000);
   initAdcClock();
   initSpiFifoMode();
@@ -62,6 +62,7 @@ void loop() {
   static uint32_t dataCounter = 0;
   if(newSample) {
     Serial.print((int32_t)code);
+    //Serial.print(codeToVoltage(code,ADC_V_REF),10);
     Serial.print(",");
     Serial.print(inverted);
     //Serial.print(",");
