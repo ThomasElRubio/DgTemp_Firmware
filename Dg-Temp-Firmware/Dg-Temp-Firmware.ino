@@ -37,7 +37,7 @@ void setup() {
   delay(500);
   dac.reset();    // Führt enableOutput() aus.
   dac.enableOutput();   // Redundant und kann gestrichen werden
-  dac.setValue(40140);   // DAC Setpoint wird festgelegt.
+  dac.setValue(39999);   // DAC Setpoint wird festgelegt.
   delay(1000);
   initAdcClock();
   initSpiFifoMode();
@@ -204,7 +204,7 @@ void initAdcClock() {
    TPM1_SC &= ~(1<<5);      // TPM counter operates in up counting mode
    TPM1_SC &= ~(111);       // Clears Bit 0-2 and therefor sets the Prescale Factor to 1
    TPM1_CNT = 0;            // Resetting the Counter Register to clear Counter
-   TPM1_MOD =  48*1-1;        // Setting MOD to 47 to reset counter when it reaches 47 after 48 Cycles
+   TPM1_MOD =  48*1-1;        // Setting MOD to 47 to reset counter when it reaches 47 after 48 Cycles. Resulting frequency is calculated by MCLK= 48MHz/(TPM1_MOD+1)
 
    /*
     * TPM1_C0SC must be initialized to Edge-aligned PWM
