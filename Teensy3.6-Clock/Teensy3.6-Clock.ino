@@ -3,8 +3,8 @@
 
 #define INVERT_PIN      4
 #define NON_INVERT_PIN  5
-#define CS_DAC          15
-#define SYNC_PIN        18
+#define SYNC_PIN        7
+#define CS_DAC          8
 AD5760 dac(CS_DAC);
 
 /*switch Truth-Table:
@@ -21,13 +21,21 @@ const float ADC_V_REF = 4.096;
 volatile bool newSample = false;
 
 void setup(){
-  delay(1000);
+  delay(100);
   SIM_CLKDIV1 |= 1<<24;
+
+  pinMode(SYNC_PIN, OUTPUT);
+  digitalWrite(SYNC_PIN, LOW);
+  pinMode(NON_INVERT_PIN, OUTPUT);
+  pinMode(INVERT_PIN, OUTPUT);
+  digitalWrite(NON_INVERT_PIN, LOW);
+  digitalWrite(INVERT_PIN, LOW);
+
+  
   dac.begin();    // initialize the DAC pin
   SPI.begin();
   delay(500);
   dac.reset();    // Führt enableOutput() aus.
-  delay(2000);
   dac.enableOutput();   // Redundant und kann gestrichen werden
   dac.setValue(39999);   // DAC Setpoint wird festgelegt.
   
@@ -35,28 +43,36 @@ void setup(){
   initAdcClock(); 
   initSpiFifoMode();
   enableSpiInterrupt();
-
   Serial.begin(115200);
   Serial.println("Worked");
-  delay(1000);
-  //attachInterrupt(digitalPinToInterrupt(2), portd_isr, HIGH);
   enableExternalInterrupt();
-  Serial.println(SPI0_CTAR1,BIN);
 }
 
 
 
 void loop(){  
-  if(newSample) {
-    Serial.println("ISR WORKED");
-    Serial.println("#Transfers:");
-    Serial.println(SPI0_TCR/65536);
-    Serial.println(code,HEX);
-    Serial.println(" ");
-    newSample = false;
+  while (Serial.available()) {
+    Serial.read();
   }
-  Serial.println(SIM_CLKDIV1,BIN);
-  delay(1000);
+
+  static bool inverted = false;   // Note: Make sure that this value corresponds to the intial value of the output pins
+  static uint32_t dataCounter = 0;
+  if(newSample) {
+    Serial.print((int32_t)code);
+    //Serial.print(codeToVoltage(code,ADC_V_REF),10);
+    Serial.print(",");
+    Serial.print(inverted);
+    //Serial.print(",");
+    // Serial.print(codeToVoltage(code, ADC_V_REF));
+    Serial.print("\n");
+    newSample = false;
+    dataCounter+=1;
+  }
+  if(dataCounter==5007) {
+    dataCounter=0;
+    inverted = !inverted;
+    invertCurrent(inverted);  
+  }
 }
 
 
@@ -64,6 +80,7 @@ void loop(){
 void invertCurrent(const bool inverted) {
   digitalWriteFast(SYNC_PIN, HIGH);
   digitalWriteFast(INVERT_PIN, inverted); 
+  //delay(1);
   digitalWriteFast(NON_INVERT_PIN, inverted);
   digitalWriteFast(SYNC_PIN, LOW);
 }
@@ -80,11 +97,19 @@ float codeToVoltage(const int32_t code, const float vref) {
 void initSpiFifoMode() {
   SPI.begin();
   SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
+  //Setting Baudrate to 500kHz
   SPI0_CTAR1 |= 1<<2;
   SPI0_CTAR1 &= ~(1<<1);
   SPI0_CTAR1 |= 1;
   SPI0_CTAR1 |= 1<<16;
-
+  //Setting delay between Interrupt an SCK
+  SPI0_CTAR1 |= 1<<18;
+  SPI0_CTAR1 |= 1<<19;
+  SPI0_CTAR1 |= 1<<20;
+  SPI0_CTAR1 |= 1<<22;
+  SPI0_CTAR1 &= ~(1<<14);
+  SPI0_CTAR1 |= 1<<13;
+  Serial.print(SPI0_CTAR1>>12,BIN);
 } 
 
 
@@ -134,9 +159,9 @@ void portd_isr(void) {
    * Timing of this transaction relating to the Busy state of the ADC is not tested yet and must be looked at.
    * Therefore modifacations to both SPI0_PUSHR (16MSB) and SPI0_CTAR1 registers is needed to optimize this transaction.
    */
+  PORTD_PCR0 |= 1<<24;
   SPI0_PUSHR = 0b00010000000000000000000000000000;    //Setting Bit 28 chooses 16-Bit SPI Mode
-  SPI0_PUSHR = 0b00011000000000000000000000000000;    // Setting Bit 27 marks the end of a queue and sets the End-of_Queue Interrupt flag in SPI0_SR
-  PORTD_PCR0 |= 1<<24;                                // Clearing ISF by writing a one to it
+  SPI0_PUSHR = 0b00011000000000000000000000000000;    // Setting Bit 27 marks the end of a queue and sets the End-of_Queue Interrupt flag in SPI0_SR                                // Clearing ISF by writing a one to it
 }
 
 
