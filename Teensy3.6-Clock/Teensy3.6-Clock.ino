@@ -21,10 +21,18 @@ const float ADC_V_REF = 4.096;
 volatile bool newSample = false;
 
 void setup(){
-
+  delay(1000);
   SIM_CLKDIV1 |= 1<<24;
+  dac.begin();    // initialize the DAC pin
+  SPI.begin();
+  delay(500);
+  dac.reset();    // Führt enableOutput() aus.
   delay(2000);
-  //initAdcClock(); 
+  dac.enableOutput();   // Redundant und kann gestrichen werden
+  dac.setValue(39999);   // DAC Setpoint wird festgelegt.
+  
+  delay(2000);
+  initAdcClock(); 
   initSpiFifoMode();
   enableSpiInterrupt();
 

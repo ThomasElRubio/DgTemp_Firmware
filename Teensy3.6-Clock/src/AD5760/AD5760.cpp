@@ -23,7 +23,7 @@ AD5760::AD5760(uint8_t cs_pin) : cs_pin(cs_pin), spi_settings(SPISettings(500000
 
 // TODO: use an SPI object to select the SPI bus
 void AD5760::writeSPI(uint32_t value) {
-  SPI1.beginTransaction(this->spi_settings);
+  SPI.beginTransaction(this->spi_settings);
 
   digitalWrite (this->cs_pin, LOW);
   delayMicroseconds(10);
@@ -33,16 +33,16 @@ void AD5760::writeSPI(uint32_t value) {
   Serial.println(value, BIN);
   #endif
   
-  SPI1.transfer((value >> 16) & 0xFF);
+  SPI.transfer((value >> 16) & 0xFF);
   delayMicroseconds(4);
-  SPI1.transfer((value >> 8) & 0xFF);
+  SPI.transfer((value >> 8) & 0xFF);
   delayMicroseconds(4);
-  SPI1.transfer((value >> 0) & 0xFF);
+  SPI.transfer((value >> 0) & 0xFF);
   delayMicroseconds(10);
 
   digitalWrite(this->cs_pin, HIGH);
   delayMicroseconds(10);
-  SPI1.endTransaction();
+  SPI.endTransaction();
 }
 
 void AD5760::readRegister(uint32_t value){
