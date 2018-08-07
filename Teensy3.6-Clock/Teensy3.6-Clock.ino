@@ -22,7 +22,7 @@ volatile bool newSample = false;
 
 void setup(){
 
-  SIM_CLKDIV1 |= 1<<26;
+  SIM_CLKDIV1 |= 1<<24;
   delay(2000);
   //initAdcClock(); 
   initSpiFifoMode();
@@ -72,7 +72,9 @@ float codeToVoltage(const int32_t code, const float vref) {
 void initSpiFifoMode() {
   SPI.begin();
   SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
+  SPI0_CTAR1 |= 1<<2;
   SPI0_CTAR1 &= ~(1<<1);
+  SPI0_CTAR1 |= 1;
   SPI0_CTAR1 |= 1<<16;
 
 } 
@@ -194,7 +196,7 @@ void initAdcClock(){
    TPM1_SC &= ~(1<<5);      // TPM counter operates in up counting mode
    TPM1_SC &= ~(111);       // Clears Bit 0-2 and therefor sets the Prescale Factor to 1
    TPM1_CNT = 0;            // Resetting the Counter Register to clear Counter
-   TPM1_MOD = 168*1-1;        // Setting MOD to 180 to reset counter when it reaches 180. Timer repeats after t=TPM1_MOD/180MHz  180*1-1
+   TPM1_MOD = 192*1-1;        // Setting MOD to 180 to reset counter when it reaches 180. Timer repeats after t=TPM1_MOD/180MHz  180*1-1
    
 
    /*
