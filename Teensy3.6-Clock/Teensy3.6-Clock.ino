@@ -3,7 +3,6 @@
 
 #define INVERT_PIN      4
 #define NON_INVERT_PIN  5
-#define SYNC_PIN        7
 #define CS_DAC          8
 AD5760 dac(CS_DAC);
 
@@ -19,45 +18,40 @@ volatile uint16_t rx1;
 volatile uint16_t rx0;
 const float ADC_V_REF = 4.096;
 volatile bool newSample = false;
-uint32_t test;
+
 
 void setup(){
-  delay(100);
-  SIM_CLKDIV1 |= 1<<24;
+  //System Clock Divider Register 1 controls the prescalers of the Busclock, Core Clock etc.
+  SIM_CLKDIV1 |= 1<<24;                     // [OUTDIV2]: Setting Bus Clock divider from 3 to 4 to get a 48MHz Bus-Clock (0b0011
 
-  pinMode(SYNC_PIN, OUTPUT);
-  digitalWrite(SYNC_PIN, LOW);
   pinMode(NON_INVERT_PIN, OUTPUT);
   pinMode(INVERT_PIN, OUTPUT);
   digitalWrite(NON_INVERT_PIN, LOW);
   digitalWrite(INVERT_PIN, LOW);
-
   
-  dac.begin();    // initialize the DAC pin
+  dac.begin();                              // initialize the DAC_CS pin
   SPI.begin();
-  delay(500);
-  dac.reset();    // Führt enableOutput() aus.
-  dac.enableOutput();   // Redundant und kann gestrichen werden
-  dac.setValue(39999);   // DAC Setpoint wird festgelegt.
+  delay(500);                               // Deleay needed between setting DAC_CS-Pin and the first SPI-Transaction (TODO: test for minimum duration)
+  dac.reset();                              // executes enableOutput
+  dac.setValue(39999);                      // DAC Setpoint is set
   
   delay(2000);
-  initFlexTimer();
-  initAdcClock(); 
-  initSpiFifoMode();
-  enableSpiInterrupt();
+  initFlexTimer();                          // Initializes FlexTimer-Module which is set to trigger both TPM-modules
+  initAdcClock();                           // Initializes TPM module for MCLK=1MHz and Sync-pulse with 61.02Hz and start all three counters
+  initSpiMode();                            // Initilizes SPI-Transaction mode
+  enableSpiInterrupt();                     // Enables Interrupt to read transmitted data directly after a transmission is finished
   Serial.begin(115200);
-  Serial.println("Worked");
-  //enableExternalInterrupt();
+  Serial.println("Setup Worked");
   
 }
 
 
 
 void loop(){  
+  // Flush serial buffer to submit data to Linux systems
   while (Serial.available()) {
     Serial.read();
   }
-
   static bool inverted = false;   // Note: Make sure that this value corresponds to the intial value of the output pins
   static uint32_t dataCounter = 0;
   if(newSample) {
@@ -83,12 +77,17 @@ void loop(){
 
 
 
+
+
+
 void invertCurrent(const bool inverted) {
-  digitalWriteFast(SYNC_PIN, HIGH);
   digitalWriteFast(INVERT_PIN, inverted); 
   digitalWriteFast(NON_INVERT_PIN, inverted);
-  digitalWriteFast(SYNC_PIN, LOW);
 }
+
+
+
+
 
 
 
@@ -99,15 +98,21 @@ float codeToVoltage(const int32_t code, const float vref) {
 
 
 
-void initSpiFifoMode() {
-  SPI.begin();
-  SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
+
+
+
+
+void initSpiMode() {
+  SPI.begin();      //probably redunant
+
+  //This function doesn't set the baudrate to 500kHz because the teensy 3.6 is overclocked to 192MHz with a bus clock of 48MHz
+  SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));  
   //Setting Baudrate to 500kHz
   SPI0_CTAR1 |= 1<<2;
   SPI0_CTAR1 &= ~(1<<1);
   SPI0_CTAR1 |= 1;
   SPI0_CTAR1 |= 1<<16;
-  //Setting delay between Interrupt an SCK
+  //Setting delay between Interrupt an SCK and the delay between the transmission of two words to ensure a right timing
   SPI0_CTAR1 |= 1<<18;
   SPI0_CTAR1 |= 1<<19;
   SPI0_CTAR1 |= 1<<20;
@@ -118,12 +123,16 @@ void initSpiFifoMode() {
 
 
 
+
+
+
+
 void enableSpiInterrupt() {
   //Interrupt Numbers are found at https://github.com/PaulStoffregen/cores/blob/master/teensy3/kinetis.h#L285
   __disable_irq();
-  NVIC_ENABLE_IRQ(IRQ_SPI0);                            //Enables the IRQ_SPI0 vector
+  NVIC_ENABLE_IRQ(IRQ_SPI0);                            // Enables the IRQ_SPI0 vector
   attachInterruptVector(IRQ_SPI0, spi0_isr);            // Connects interrupt vector with a service routine
-  SPI0_RSER |= 1<<28;                                   //Enables End of Queue Interrupt
+  SPI0_RSER |= 1<<28;                                   // Enables End of Queue Interrupt
   __enable_irq();
 }
 
@@ -136,9 +145,9 @@ void FTM_isr(void) {
    * Timing of this transaction relating to the Busy state of the ADC is not tested yet and must be looked at.
    * Therefore modifacations to both SPI0_PUSHR (16MSB) and SPI0_CTAR1 registers is needed to optimize this transaction.
    */
-  FTM0_STATUS;
-  FTM0_STATUS = 0;
-  SPI0_PUSHR = 0b00010000000000000000000000000000;    //Setting Bit 28 chooses 16-Bit SPI Mode
+  FTM0_STATUS;                                        // To clear FTM channel interrupt the FTM0_Satus register must be read and cleared by writing a 0 to it afterwards
+  FTM0_STATUS = 0;                                    // Writing a 0 to the FTM0_STATUS register clears all interrupts on all channels
+  SPI0_PUSHR = 0b00010000000000000000000000000000;    // Setting Bit 28 chooses 16-Bit SPI Mode
   SPI0_PUSHR = 0b00011000000000000000000000000000;    // Setting Bit 27 marks the end of a queue and sets the End-of_Queue Interrupt flag in SPI0_SR     
   
   
@@ -147,11 +156,11 @@ void FTM_isr(void) {
 
 
 void spi0_isr(void) {
-  SPI0_SR |= 1<<28;         //Writing a 1 to this Bit clears the End of Que Interrupt Flag
-  rx1 = SPI0_POPR;
-  rx0 = SPI0_POPR;
-  code = rx1;
-  code = (code<<16) | rx0;
+  SPI0_SR |= 1<<28;         // Writing a 1 to this Bit clears the End of Que Interrupt Flag
+  rx1 = SPI0_POPR;          // Read and save the first 16 received bits (16MSB)
+  rx0 = SPI0_POPR;          // Read and save the last 16 received bits  (16LSB)
+  code = rx1;               // combine both 16 bit words to a 32 bit word
+  code = (code<<16) | rx0;  
   newSample = true;
 }
 
@@ -179,7 +188,7 @@ void initAdcClock(){
   
 	/* Manual Version "K66 Sub-Family Reference Manual, Rev. 2, May 2015"
 	 * TPM Clocks are listed on p. 130 in figure 6-6.
-	 * MCGPLLCLK goes up to 180Mhz
+	 * MCGPLLCLK goes up to 192Mhz(while overclocked
 	 * First set the fields [TPMSRC] and [PLLFLLSEL] of the SIM_SOPT2 register to chose clock (p.238)
 	 * [TPMSRC] = 01 and [PLLFLLSRC] = 01 chooses MCGPLLCLK which goes op to 180Mhz
 	 * To get 180MHz set the last 4 Bits of the SIM_CLKDIV3 register to 0
@@ -189,16 +198,19 @@ void initAdcClock(){
 	/* The USB module operates with the same clock as the TPM-Module
 	 * SIM_CLKDIV2 generates USB FS clock with: Divider output clock = Divider input clock × [ (USBFRAC+1) / (USBDIV+1) ]
 	*/
-	SIM_SCGC4 &= ~(1<<18);      //SIM_SCGC4[USBOTG]: Disables clock at USB clock gate
-	SIM_SOPT2 &= ~(1<<17);      //SIM_SOPT2[PLLFLLSEL] gate to control clock selection. Clearing this Bit changes Clock from IRC48M (48MHz) to MCGPLLCLK(180MHz)
-	SIM_CLKDIV2 |= 0b111<<1;      //SIM_CLKDIV2[USBDIV]: Clock division is now needed to get a clock that is as close to 48MHz as possible. 
-	SIM_CLKDIV2 |= 1;           //SIM_CLKDIV2[USBFRAC]:
-	SIM_SCGC4 |= 1<<18;         //SIM_SCGC4[USBOTG]: Enables clock at USB clock gate
+	SIM_SCGC4 &= ~(1<<18);      // SIM_SCGC4[USBOTG]: Disables clock at USB clock gate so the usb clock can be changed
+	SIM_SOPT2 &= ~(1<<17);      // SIM_SOPT2[PLLFLLSEL] gate to control clock selection. Clearing this Bit changes Clock from IRC48M (48MHz) to MCGPLLCLK(180MHz)
+	SIM_CLKDIV2 |= 0b111<<1;    // SIM_CLKDIV2[USBDIV]: Clock division is now needed to get a clock of 48MHz. 
+	SIM_CLKDIV2 |= 1;           // SIM_CLKDIV2[USBFRAC]:
+	SIM_SCGC4 |= 1<<18;         // SIM_SCGC4[USBOTG]: Enables clock at USB clock gate
 
 
-	TpmCntEnable(false);
-	
-	//TPM clock source select set to 01
+
+	TpmCntEnable(false);        // Disable both TPM counters so both can be adapted
+
+
+  
+	//TPM clock source select set to 0b01 to select MCGPLLCLK
 	SIM_SOPT2 |= 1<<24;     // [TPMSRC]
 	SIM_SOPT2 &= ~(1<<25);  // [TPMSRC]
   
@@ -303,8 +315,8 @@ void initFlexTimer(){
   __enable_irq();
   
   //Setting Counter Initvalue
-  FTM0_CNTIN = 0;   //Setting this Register to 0 garanties a counter that always starts a 0
-  FTM0_MOD = 49151;
+  FTM0_CNTIN = 0;         //Setting this Register to 0 garanties a counter that always starts a 0
+  FTM0_MOD = (16384*3)-1;       //Timeroverflow occours at Countervalue=MOD which resets the counter at a frequency of 61.02Hz
 
 
 
