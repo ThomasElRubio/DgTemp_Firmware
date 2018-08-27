@@ -4,6 +4,8 @@
 #define INVERT_PIN      4
 #define NON_INVERT_PIN  5
 #define CS_DAC          8
+#define NUMBER_OF_SAMPLES 504
+#define SAMPLES_UNTIL_SETTLES 8
 AD5760 dac(CS_DAC);
 
 /*switch Truth-Table:
@@ -52,38 +54,21 @@ void loop(){
   while (Serial.available()) {
     Serial.read();
   }
-  static bool inverted = false;   // Note: Make sure that this value corresponds to the intial value of the output pins
-  static uint32_t dataCounter = 0;
   if(newSample) {
     Serial.print((int32_t)code);
     //Serial.print(codeToVoltage(code,ADC_V_REF),10);
     Serial.print(",");
-    Serial.print(inverted);
+    Serial.print(GPIOD_PDOR>>7 & 1U);
     Serial.print(",");
     Serial.print(FTM0_C0V);     //Print Channel Value at rising flank of the DRL pulse
     Serial.print(",");
-    Serial.print(FTM0_C1V);
+    Serial.print(SPI0_TCR>>16);
     Serial.print("\n");
     newSample = false;
-    dataCounter+=1;
-  }
-  if(dataCounter==5007) {
-    inverted = !inverted;
-    invertCurrent(inverted);  
-    dataCounter=0;
   }
 
 }
 
-
-
-
-
-
-void invertCurrent(const bool inverted) {
-  digitalWriteFast(INVERT_PIN, inverted); 
-  digitalWriteFast(NON_INVERT_PIN, inverted);
-}
 
 
 
@@ -149,8 +134,8 @@ void FTM_isr(void) {
   FTM0_STATUS = 0;                                    // Writing a 0 to the FTM0_STATUS register clears all interrupts on all channels
   SPI0_PUSHR = 0b00010000000000000000000000000000;    // Setting Bit 28 chooses 16-Bit SPI Mode
   SPI0_PUSHR = 0b00011000000000000000000000000000;    // Setting Bit 27 marks the end of a queue and sets the End-of_Queue Interrupt flag in SPI0_SR     
-  
-  
+  GPIOA_PTOR |= (!(SPI0_TCR % (2*(NUMBER_OF_SAMPLES + SAMPLES_UNTIL_SETTLES)<<16)))<<13;
+  GPIOD_PTOR |= (!(SPI0_TCR % (2*(NUMBER_OF_SAMPLES + SAMPLES_UNTIL_SETTLES)<<16)))<<7;
   
 }
 
