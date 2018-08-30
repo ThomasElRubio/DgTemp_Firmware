@@ -301,7 +301,7 @@ void initFlexTimer(){
   
   //Setting Counter Initvalue
   FTM0_CNTIN = 0;         //Setting this Register to 0 garanties a counter that always starts a 0
-  FTM0_MOD = (16384*3)-1;       //Timeroverflow occours at Countervalue=MOD which resets the counter at a frequency of 61.02Hz
+  FTM0_MOD = (4096*3)-1;       //Timeroverflow occours at Countervalue=MOD which resets the counter at a frequency of 61.02Hz
 
 
 
