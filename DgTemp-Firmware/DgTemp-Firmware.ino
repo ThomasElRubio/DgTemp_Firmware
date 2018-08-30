@@ -1,12 +1,18 @@
 #include <SPI.h>
 #include "src/AD5760/AD5760.h"
+#include <DMAChannel.h>
 
 #define INVERT_PIN      4
 #define NON_INVERT_PIN  5
 #define CS_DAC          8
-#define NUMBER_OF_SAMPLES 504
+#define NUMBER_OF_SAMPLES 4088
 #define SAMPLES_UNTIL_SETTLES 8
 AD5760 dac(CS_DAC);
+
+DMAChannel tx;
+DMAChannel rx;
+//Guck dir das Register SIM_SIOPT4, SIM_SOPT8,SIM_SOPT9 SIM_SCGC3,SIM_SCGC5,6,7 SIM_CLKDIV
+//sdhc,uart
 
 /*switch Truth-Table:
  * 00: Non-Inverted
@@ -18,14 +24,64 @@ AD5760 dac(CS_DAC);
 volatile uint32_t code;
 volatile uint16_t rx1;
 volatile uint16_t rx0;
+const uint32_t data[]={0b00010000000000000000000000000000, 0b00011000000000000000000000000000};
+volatile uint32_t recData[] = {0, 0};
 const float ADC_V_REF = 4.096;
 volatile bool newSample = false;
 
 
-void setup(){
-  //System Clock Divider Register 1 controls the prescalers of the Busclock, Core Clock etc.
-  SIM_CLKDIV1 |= 1<<24;                     // [OUTDIV2]: Setting Bus Clock divider from 3 to 4 to get a 48MHz Bus-Clock (0b0011
+void initClocks(){
+    //System Clock Divider Register 1 controls the prescalers of the Busclock, Core Clock etc.
+  SIM_CLKDIV1 |= SIM_CLKDIV1_OUTDIV2(0b0011);                     // Chekc if this worked:Setting Bus Clock divider from 3 to 4 to get a 48MHz Bus-Clock (0b0011)
 
+  //Stop all Counter by deselecting the clock
+  TPM1_SC &= (0b11<<3);           // TPM1_SC_CMOD: 00 -> Disable TPM1 counter 
+  TPM2_SC &= (0b11<<3);           // TPM1_SC_CMOD: 00 -> Disable TPM2 counter
+  // Clear write Protection on FTM0 registers
+  if ((FTM0_FMS >> 6) & 1U)FTM0_MODE |= 1<<2;
+  FTM0_SC &= ~(0b11<<3);         // FTM0_SC_CLKS : 00 -> Disable FTM counter
+  
+  // Reset all Counter
+  FTM0_CNTIN = 0x00;            // Setting initial value of the counter to 0
+  FTM0_CNT = 0x00;              // Writing any value to this counter resets the counter to its CNTIN value
+  TPM1_CNT = 0x00;              // Writing any value to this register resets the counter to zero
+  TPM2_CNT = 0x00;              // Writing any value to this register resets the counter to zero
+
+  // Configuring all clocks that are needed for the counter modules to work
+  SIM_SCGC4 &= ~(SIM_SCGC4_USBOTG);       // Disables clock at USB clock gate so the usb clock can be changed
+  SIM_SOPT2 |= SIM_SOPT2_PLLFLLSEL;       // TODO: Check this register Value!
+
+
+  
+  SIM_SOPT2 &= ~(1<<17);      // SIM_SOPT2[PLLFLLSEL] gate to control clock selection. Clearing this Bit changes Clock from IRC48M (48MHz) to MCGPLLCLK(180MHz)
+  SIM_CLKDIV2 |= 0b111<<1;    // SIM_CLKDIV2[USBDIV]: Clock division is now needed to get a clock of 48MHz. 
+  SIM_CLKDIV2 |= 1;           // SIM_CLKDIV2[USBFRAC]:
+  SIM_SCGC4 |= 1<<18;         // SIM_SCGC4[USBOTG]: Enables clock at USB clock gate
+    //TPM clock source select set to 0b01 to select MCGPLLCLK
+  SIM_SOPT2 |= 1<<24;     // [TPMSRC]
+  SIM_SOPT2 &= ~(1<<25);  // [TPMSRC]
+  FTM0_SC &= ~(1);      // Set FTM0_SC[PS] to 100 to get a prescaler of 16 which reduces the counter clock down to 3MHz
+  FTM0_SC &= ~(1<<1);
+  FTM0_SC |= 1<<2;
+
+
+
+  
+  }
+
+
+  
+void moduleClockGateEnable(){
+  SIM_SCGC2 |= SIM_SCGC2_TPM2 | SIM_SCGC2_TPM1;       // Enable TPM2 Module
+  SIM_SCGC6 |= SIM_SCGC6_FTM0 | SIM_SCGC6_SPI0 | SIM_SCGC6_DMAMUX;  //Enable FlexTimer,SPI0 and DMAMUX
+  SIM_SCGC7 |= SIM_SCGC7_DMA;
+  // Check SIM_SCGC5 if all Port A to E are enabled
+  }
+
+void setup(){
+  moduleClockGateEnable();
+  initClocks();
+  moduleClockGateEnable();
   pinMode(NON_INVERT_PIN, OUTPUT);
   pinMode(INVERT_PIN, OUTPUT);
   digitalWrite(NON_INVERT_PIN, LOW);
@@ -40,10 +96,30 @@ void setup(){
   delay(2000);
   initFlexTimer();                          // Initializes FlexTimer-Module which is set to trigger both TPM-modules
   initAdcClock();                           // Initializes TPM module for MCLK=1MHz and Sync-pulse with 61.02Hz and start all three counters
+  
+  delay(100);
   initSpiMode();                            // Initilizes SPI-Transaction mode
   enableSpiInterrupt();                     // Enables Interrupt to read transmitted data directly after a transmission is finished
   Serial.begin(115200);
+
+  SPI0_SR = 0xFF0F0000;
+  SPI0_RSER = 0x00;
+  SPI0_RSER = SPI_RSER_EOQF_RE | SPI_RSER_TFFF_RE | SPI_RSER_TFFF_DIRS | SPI_RSER_RFDF_RE | SPI_RSER_RFDF_DIRS;
+
+  tx.disable();
+  rx.disable();
+  rx.destinationBuffer(recData,8);
+  rx.source((volatile uint32_t &) SPI0_POPR);
+  rx.triggerAtHardwareEvent(DMAMUX_SOURCE_SPI0_RX);
+  rx.disableOnCompletion();
+  tx.sourceBuffer(data, 8);
+  tx.destination((volatile uint32_t &) SPI0_PUSHR);
+  tx.triggerAtHardwareEvent(DMAMUX_SOURCE_SPI0_TX);
+  tx.disableOnCompletion();
+  tx.enable();
+  rx.enable();
   Serial.println("Setup Worked");
+  Serial.println(SIM_SCGC6,BIN);
   
 }
 
@@ -54,21 +130,40 @@ void loop(){
   while (Serial.available()) {
     Serial.read();
   }
+  static bool inverted = false;   // Note: Make sure that this value corresponds to the intial value of the output pins
+  static uint32_t dataCounter = 0;
   if(newSample) {
     Serial.print((int32_t)code);
     //Serial.print(codeToVoltage(code,ADC_V_REF),10);
     Serial.print(",");
-    Serial.print(GPIOD_PDOR>>7 & 1U);
+    Serial.print(inverted);
     Serial.print(",");
     Serial.print(FTM0_C0V);     //Print Channel Value at rising flank of the DRL pulse
     Serial.print(",");
-    Serial.print(SPI0_TCR>>16);
+    Serial.print(FTM0_C1V);
     Serial.print("\n");
+    Serial.println(recData[0]);
+    Serial.println(recData[1]);
     newSample = false;
+    dataCounter+=1;
+  }
+  if(dataCounter==5007) {
+    inverted = !inverted;
+    invertCurrent(inverted);  
+    dataCounter=0;
   }
 
 }
 
+
+
+
+
+
+void invertCurrent(const bool inverted) {
+  digitalWriteFast(INVERT_PIN, inverted); 
+  digitalWriteFast(NON_INVERT_PIN, inverted);
+}
 
 
 
@@ -89,6 +184,7 @@ float codeToVoltage(const int32_t code, const float vref) {
 
 void initSpiMode() {
   SPI.begin();      //probably redunant
+  SIM_SCGC6|= 1<<13;  //enables SPI1 clockgate
 
   //This function doesn't set the baudrate to 500kHz because the teensy 3.6 is overclocked to 192MHz with a bus clock of 48MHz
   SPI.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));  
@@ -132,10 +228,13 @@ void FTM_isr(void) {
    */
   FTM0_STATUS;                                        // To clear FTM channel interrupt the FTM0_Satus register must be read and cleared by writing a 0 to it afterwards
   FTM0_STATUS = 0;                                    // Writing a 0 to the FTM0_STATUS register clears all interrupts on all channels
-  SPI0_PUSHR = 0b00010000000000000000000000000000;    // Setting Bit 28 chooses 16-Bit SPI Mode
-  SPI0_PUSHR = 0b00011000000000000000000000000000;    // Setting Bit 27 marks the end of a queue and sets the End-of_Queue Interrupt flag in SPI0_SR     
-  GPIOA_PTOR |= (!(SPI0_TCR % (2*(NUMBER_OF_SAMPLES + SAMPLES_UNTIL_SETTLES)<<16)))<<13;
-  GPIOD_PTOR |= (!(SPI0_TCR % (2*(NUMBER_OF_SAMPLES + SAMPLES_UNTIL_SETTLES)<<16)))<<7;
+  SPI0_SR = 0xFF0F0000;
+  tx.enable();
+  rx.enable();
+  //SPI0_PUSHR = 0b00010000000000000000000000000000;    // Setting Bit 28 chooses 16-Bit SPI Mode
+  //SPI0_PUSHR = 0b00011000000000000000000000000000;    // Setting Bit 27 marks the end of a queue and sets the End-of_Queue Interrupt flag in SPI0_SR     
+  
+  
   
 }
 
@@ -158,7 +257,6 @@ void TpmCntEnable(bool Enable){
 		FTM0_FMS |= 1<<6;         //Writing a 1 to WPEN also clears FTM0_MODE[WPDIS] and enables write protection
 	}
 	else{
-		SIM_SCGC2 |= 1<<10;       // Enable TPM2 Module
 		TPM1_SC &= ~(1<<4);       // Clears Bit 4 [CMOD]
 		TPM1_SC &= ~(1<<3);       // Clears Bit 3 [CMOD]
 		TPM2_SC &= ~(1<<4);       // Clears Bit 4 [CMOD]
@@ -266,9 +364,7 @@ void initFlexTimer(){
 	FTM0_SC &= ~(1<<4);	 	// clearing Bit 3 and 4 to deselect clock and disable the FTM counter for further configurations
 	FTM0_SC &= ~(1<<3);		
 	FTM0_SC &= ~(1<<5);	 	// Counter is in Up-Counting Mode. This is also needed to use Input-Capture-Mode
-	FTM0_SC &= ~(1);			// Set FTM0_SC[PS] to 100 to get a prescaler of 16 which reduces the counter clock down to 3MHz
-	FTM0_SC &= ~(1<<1);
-	FTM0_SC |= 1<<2;
+	
 
 
 
