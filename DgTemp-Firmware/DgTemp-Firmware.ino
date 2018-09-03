@@ -213,7 +213,7 @@ void initAdcClock(){
 	 * TPM1_POL Bit 0 and 1 controll polarity of channel 0 and 1 with 0=active high
 	 * TPM1_CONF check init later Counter Pause(0),Reload(1), Stop(1) or Start (0) on Trigger, GTBEEN(0),
 	*/
-	TPM1_C0V = 4;        		// If C0V == Counter match occurs an Channel Interrupt Flag. An increase of one increases the hightime by 5,55ns 
+	TPM1_C0V = 4;        		// If C0V == Counter match occurs an Channel Interrupt Flag. An increase of one increases the hightime by 5,55ns. Alternate Falling Edge after Conversion with C0V =140
 	TPM1_C0SC |= 1<<5;     	//MSB set to 1
 	TPM1_C0SC &= ~(1<<4);  	//MSA set to 0  
 	TPM1_C0SC |= 1<<3;     	//ELSB set to 1
@@ -242,7 +242,7 @@ void initAdcClock(){
   TPM2_CONF |= 1<<18;             // Counter Resets at Trigger
   TPM2_CONF |= 1<<27;           // Trigger occours when FTM0_CNT=0
   
-	//Selecting Alt 6 for PORTB_PCR0 to get Sync Pulse on Pin 16
+	//Selecting Alt 6 for PORTB_PCR0 to get Sync Pulse on Pin 29
 	PORTB_PCR18 |= 1<<10;
   PORTB_PCR18 |= 1<<9;    
   PORTB_PCR18 &= ~(1<<8);
