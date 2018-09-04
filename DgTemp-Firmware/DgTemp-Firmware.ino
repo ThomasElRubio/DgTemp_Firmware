@@ -5,14 +5,12 @@
 #define INVERT_PIN      4
 #define NON_INVERT_PIN  5
 #define CS_DAC          8
-#define NUMBER_OF_SAMPLES 4088
+#define NUMBER_OF_SAMPLES 504
 #define SAMPLES_UNTIL_SETTLES 8
 AD5760 dac(CS_DAC);
 DMAChannel tx;
 DMAChannel rx;
 DMAChannel Trigger;
-//Guck dir das Register SIM_SIOPT4, SIM_SOPT8,SIM_SOPT9 SIM_SCGC3,SIM_SCGC5,6,7 SIM_CLKDIV
-//sdhc,uart
 
 /*switch Truth-Table:
  * 00: Non-Inverted
@@ -22,9 +20,8 @@ DMAChannel Trigger;
  */
 
 volatile uint32_t code;
-volatile uint32_t rx1;
-//volatile uint16_t rx0;
-const uint32_t data[]={0b00010000000000000000001010101010, 0b00011000000000000000000000001110};
+
+const uint32_t data[]={0b00010000000000000000000000000000, 0b00011000000000000000000000000000};
 volatile uint32_t recData[] = {0, 0};
 const float ADC_V_REF = 4.096;
 volatile bool newSample = false;
@@ -96,11 +93,6 @@ void setup(){
   dac.reset();                              // executes enableOutput
   dac.setValue(39999);                      // DAC Setpoint is set
 
-
-
-
-  
-
   
   
   initFlexTimer();                          // Initializes FlexTimer-Module which is set to trigger both TPM-modules
@@ -132,14 +124,12 @@ void loop(){
     Serial.print(",");
     Serial.print(FTM0_C0V);     //Print Channel Value at rising flank of the DRL pulse
     Serial.print(",");
-    Serial.print(FTM0_C1V);
+    Serial.print(SPI1_TCR>>16);
     Serial.print("\n");
-    Serial.println(recData[0]);
-    Serial.println(recData[1]);
+    
     newSample = false;
   }
-  delay(2000);
-  Serial.println("Wait");
+  
 }
 
 
@@ -219,12 +209,16 @@ void initSpiMode() {
   SPI1_CTAR1 |= 1;
   SPI1_CTAR1 |= 1<<16;
   //Setting delay between Interrupt an SCK and the delay between the transmission of two words to ensure a right timing
-  SPI1_CTAR1 |= 1<<18;
-  SPI1_CTAR1 |= 1<<19;
-  SPI1_CTAR1 |= 1<<20;
-  SPI1_CTAR1 |= 1<<22;
-  SPI1_CTAR1 &= ~(1<<14);
-  SPI1_CTAR1 |= 1<<13;
+  SPI1_CTAR1 &= ~(0b11<<22);
+  SPI1_CTAR1 &= ~(0b11<<20);
+  SPI1_CTAR1 &= ~(0b11<<18);
+  SPI1_CTAR1 &= ~(0b1111<<12);
+  SPI1_CTAR1 &= ~(0b1111<<8);
+  SPI1_CTAR1 &= ~(0b1111<<4);
+  SPI1_CTAR1 |= 0b0100<<12;
+  //SPI1_CTAR1 |= 0b0010<<4;
+  SPI1_CTAR1 |= 0b01<<20;
+  SPI1_CTAR1 |= 0b10<<18;
 } 
 
 
@@ -240,21 +234,16 @@ void FTM_isr(void) {
    */
   FTM0_STATUS;                                        // To clear FTM channel interrupt the FTM0_Satus register must be read and cleared by writing a 0 to it afterwards
   FTM0_STATUS = 0;                                    // Writing a 0 to the FTM0_STATUS register clears all interrupts on all channels
-  //Trigger.enable();
-  //tx.enable();
-  //rx.enable();
-  //SPI1_PUSHR = 0b00011000000000000000000000000000;     
-  
-  
-  
+  GPIOA_PTOR |= (!(SPI1_TCR % (2*(NUMBER_OF_SAMPLES + SAMPLES_UNTIL_SETTLES)<<16)))<<13;
+  GPIOD_PTOR |= (!(SPI1_TCR % (2*(NUMBER_OF_SAMPLES + SAMPLES_UNTIL_SETTLES)<<16)))<<7;
+   
 }
 
 
 void spi1_isr(void) {
   rx.clearInterrupt();
-  //SPI1_SR |= 1<<28;         // Writing a 1 to this Bit clears the End of Que Interrupt Flag
-  //rx1 = SPI0_POPR;          // Read and save the first 16 received bits (16MSB)
-  //code = rx1;               // combine both 16 bit words to a 32 bit word
+  code = recData[0];
+  code = (code<<16) | recData[1];
   newSample = true;
 }
 
