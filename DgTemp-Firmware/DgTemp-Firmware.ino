@@ -122,6 +122,8 @@ void loop(){
     Serial.print((int32_t)code);
     //Serial.print(codeToVoltage(code,ADC_V_REF),10);
     Serial.print(",");
+    Serial.print(GPIOD_PDOR>>7 & 1U);
+    Serial.print(",");
     Serial.print(FTM0_C0V);     //Print Channel Value at rising flank of the DRL pulse
     Serial.print(",");
     Serial.print(SPI1_TCR>>16);
@@ -134,6 +136,7 @@ void loop(){
 
 
 void initDmaSpi(){
+  // Select Pin 26 for external DMA Trigger at DRl Pulse
   PORTA_PCR14 &= ~(1);
   PORTA_PCR14 &= ~(1<<2);
   PORTA_PCR14 &= ~(0b111<<8);
