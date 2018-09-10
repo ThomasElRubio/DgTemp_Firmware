@@ -21,7 +21,7 @@ DMAChannel Trigger;
 
 volatile uint32_t code;
 
-const uint32_t data[]={0b00010000000000000000000000000000, 0b00011000000000000000000000000000};
+const uint32_t data[]={0b00010000000000000000000000000000,0b00011000000000000000000000000000};
 volatile uint32_t recData[] = {0, 0};
 const float ADC_V_REF = 4.096;
 volatile bool newSample = false;
@@ -155,7 +155,7 @@ void initDmaSpi(){
   Trigger.sourceBuffer(CLEAR_FLAG,4);
   Trigger.destination((uint32_t &) SPI1_SR);
   Trigger.triggerAtHardwareEvent(DMAMUX_SOURCE_PORTA);
-  rx.destinationBuffer(recData,8);
+  rx.destinationBuffer(recData, 8);
   rx.source((volatile uint32_t &) SPI1_POPR);
   rx.triggerAtHardwareEvent(DMAMUX_SOURCE_SPI1_RX);
   tx.sourceBuffer(data, 8);
@@ -367,9 +367,17 @@ void initFlexTimer(){
 	FTM0_C1SC |= 1<<3;        //ELSB
 	FTM0_C1SC &= ~(1<<2);     //ELSA
   SIM_SOPT8 |= 1;
-  FTM0_EXTTRIG |= 1<<6;
+  FTM0_EXTTRIG |= 1<<6;     //Enabling Trigger at countervalue of 0 to trigger ADC-Clock module and Sync-Pulse Module
   
-  
+  //Enabling two Edge-Aligned PWM Channels to simulate a CS for two ADC
+  FTM0_C2SC |= 1<<5;        //MSB:MSA set to 1X
+  FTM0_C2SC &= ~(1<<3);
+  FTM0_C2SC |= 1<<2;
+  FTM0_C2V = 192;
+  FTM0_C3SC |= 1<<5;        //MSB:MSA set to 1X
+  FTM0_C3SC &= ~(1<<2);
+  FTM0_C3SC |= 1<<3;
+  FTM0_C3V = 192;
 
 
   __disable_irq();
@@ -392,6 +400,13 @@ void initFlexTimer(){
   PORTC_PCR2 |= 1<<10; 
   PORTC_PCR2 &= ~(1<<9);
   PORTC_PCR2 &= ~(1<<8); 
+
+  PORTC_PCR3 |= 1<<10;
+  PORTC_PCR3 &= ~(1<<9);
+  PORTC_PCR3 &= ~(1<<8);
+  PORTC_PCR4 |= 1<<10;
+  PORTC_PCR4 &= ~(1<<9);
+  PORTC_PCR4 &= ~(1<<8);
 
   /*
    * Diese beiden funktionen müssen vermutlich in initAdcClock() verlegt werden um eine synchronisation zu ohne externen oder Software trigger zu garantieren
