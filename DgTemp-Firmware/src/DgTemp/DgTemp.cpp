@@ -1,27 +1,42 @@
+#ifndef DGTEMP_cpp
+#define DGTEMP_cpp
 
 
 #include "DgTemp.h"
+#include <Arduino.h>
+#include <SPI.h>
+#include <DMAChannel.h>
 
+DMAChannel tx;
+DMAChannel rx;
+DMAChannel Trigger;
+volatile uint32_t recData[] = {0, 0};
+volatile uint32_t code;
+const uint32_t SPI_RESUME_TRANSACTION = 0b1 << 28; 
+const uint32_t SPI_END_TRANSACTION = 0b11 << 27;
+const uint32_t CLEAR_FLAG[] = {0xFF0F0000};
+const uint32_t data[] = {SPI_RESUME_TRANSACTION,SPI_END_TRANSACTION};
 
+volatile bool newSample = false;
 
-
-void DgTempClass::clockInit(){
-	this->initClocks();
-	this->moduleClockGateEnable();
+void clockInit(){
+	moduleClockGateEnable();
+	initClocks();
+	moduleClockGateEnable();
 }
 
-void DgTempClass::spiInit(){
-	this->initSpiBus();
-	this->initDmaSpi();
+void spiInit(){
+	initSpiBus();
+	initDmaSpi();
 }
 
-void DgTempClass::timerInit(){
-	this->initFlexTimer();
-	this->initAdcClock();
-	this->timerCounterEnable(true);
+void timerInit(){
+	initFlexTimer();
+	initAdcClock();
+	timerCounterEnable(true);
 }
 
-void DgTempClass::moduleClockGateEnable(){
+void moduleClockGateEnable(){
 	SIM_SCGC2 |= SIM_SCGC2_TPM2 | SIM_SCGC2_TPM1;       // Enable TPM2 Module
 	SIM_SCGC6 |= SIM_SCGC6_FTM0 | SIM_SCGC6_SPI0 | SIM_SCGC6_SPI1; // Enable FlexTimer,SPI0 and DMAMUX
 }
@@ -41,7 +56,7 @@ void spi1_isr(void) {
 }
 
 
-void DgTempClass::initClocks(){
+void initClocks(){
 	//System Clock Divider Register 1 controls the prescalers of the Busclock, Core Clock etc.
 	SIM_CLKDIV1 |= SIM_CLKDIV1_OUTDIV2(0b0011);                     // Setting Bus Clock divider from 3 to 4 to get a 48MHz Bus-Clock (0b0011)
 	
@@ -75,7 +90,7 @@ void DgTempClass::initClocks(){
 	FTM0_SC |= 1<<2;
 }
 
-void DgTempClass::initFlexTimer(){
+void initFlexTimer(){
 	// Setting counter to up-counting mode
 	FTM0_SC &= ~(1<<5);	 	// Counter is in Up-Counting Mode. This is also needed to use Input-Capture-Mode
 	
@@ -138,7 +153,7 @@ void DgTempClass::initFlexTimer(){
 	PORTC_PCR4 &= ~(1<<8);
 }
 
-void DgTempClass::initAdcClock(){  
+void initAdcClock(){  
 	// Manual Version "K66 Sub-Family Reference Manual, Rev. 2, May 2015"
 
   
@@ -192,7 +207,7 @@ void DgTempClass::initAdcClock(){
 	PORTB_PCR18 |= 1<<6; 
 }
 
-void DgTempClass::initDmaSpi(){
+void initDmaSpi(){
   // Select Pin 26 for external DMA Trigger at DRl Pulse
   PORTA_PCR14 &= ~(1);
   PORTA_PCR14 &= ~(1<<2);
@@ -231,7 +246,7 @@ void DgTempClass::initDmaSpi(){
   enableDmaInterrupt(); 
 }
 
-void DgTempClass::initSpiBus(){ 	
+void initSpiBus(){ 	
 	SPI1.begin();
 	SPI1.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
 	SPI1_CTAR1 |= 1<<2;
@@ -251,7 +266,7 @@ void DgTempClass::initSpiBus(){
 	SPI1_CTAR1 |= 0b10<<18;
 } 
 
-void DgTempClass::enableDmaInterrupt(){
+void enableDmaInterrupt(){
 	__disable_irq();
 	NVIC_ENABLE_IRQ(IRQ_DMA_CH1);
 	attachInterruptVector(IRQ_DMA_CH1,spi1_isr);
@@ -259,9 +274,7 @@ void DgTempClass::enableDmaInterrupt(){
 }
 
 
-
-
-void DgTempClass::timerCounterEnable(bool Enable){
+void timerCounterEnable(bool Enable){
 	if (Enable){
 		TPM1_SC |= 1<<3;         // Sets Bit 3 to 1 [CMOD] --> [CMOD]=0b01 TPM counter increments on every TPM counter clock
 		TPM2_SC |= 1<<3;         // Sets Bit 3 to 1 [CMOD] --> [CMOD]=0b01 TPM counter increments on every TPM counter clock
@@ -276,3 +289,6 @@ void DgTempClass::timerCounterEnable(bool Enable){
 		
    }
 }
+
+
+#endif

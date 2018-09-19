@@ -6,7 +6,7 @@
 
 #define CS_DAC          8
 AD5760 dac(CS_DAC);
-DgTempClass DgTemp;
+
 
 /*switch Truth-Table:
  * 00: Non-Inverted
@@ -26,7 +26,7 @@ const float ADC_V_REF = 4.096;
 
 
 void setup(){
-  DgTemp.clockInit();
+  clockInit();
   pinMode(NON_INVERT_PIN, OUTPUT);
   pinMode(INVERT_PIN, OUTPUT);
   digitalWrite(NON_INVERT_PIN, LOW);
@@ -38,8 +38,9 @@ void setup(){
   dac.reset();                              // executes enableOutput
   dac.setValue(39999);                      // DAC Setpoint is set
 
-  DgTemp.spiInit();
-  DgTemp.timerInit();
+  
+  spiInit();
+  timerInit();
   
   Serial.begin(115200);
   Serial.println("Setup Worked");
