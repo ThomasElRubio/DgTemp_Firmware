@@ -1,12 +1,13 @@
 #include <SPI.h>
 #include "src/AD5760/AD5760.h"
 #include "src/DgTemp/DgTemp.h"
+#include "src/TeensyDAC/TeensyDAC.h"
 #include <DMAChannel.h>
 
 
 #define CS_DAC          8
 AD5760 dac(CS_DAC);
-
+TeensyDAC DCDC;
 
 /*switch Truth-Table:
  * 00: Non-Inverted
@@ -17,16 +18,14 @@ AD5760 dac(CS_DAC);
 
 
 const float ADC_V_REF = 4.096;
-
-
-
-
-
   
 
 
 void setup(){
   clockInit();
+  DCDC.dacSetup();
+  Serial.println(DCDC.dacOutput());
+  
   pinMode(NON_INVERT_PIN, OUTPUT);
   pinMode(INVERT_PIN, OUTPUT);
   digitalWrite(NON_INVERT_PIN, LOW);
@@ -41,14 +40,13 @@ void setup(){
   
   spiInit();
   timerInit();
-  
+
   Serial.begin(115200);
   Serial.println("Setup Worked");
 
 
 
   
- 
   
 }
 
@@ -56,6 +54,8 @@ void setup(){
 
 void loop(){  
   // Flush serial buffer to submit data to Linux systems
+
+ 
   while (Serial.available()) {
     Serial.read();
   }
@@ -72,6 +72,7 @@ void loop(){
     
     newSample = false;
   }
+
   
 }
 
