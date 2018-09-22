@@ -2,10 +2,18 @@
 #include "src/AD5760/AD5760.h"
 #include "src/DgTemp/DgTemp.h"
 #include "src/TeensyDAC/TeensyDAC.h"
+#include "src/pid/pid.h"
 #include <DMAChannel.h>
 
-#define CS_DAC          8
+
+#define CS_DAC              8
+#define SETPOINT            285000000
+#define KP                  500
+#define KI                  0
+#define KD                  0
+#define QN                  20
 AD5760 dac(CS_DAC);
+PID pid(SETPOINT, KP, KI, KD, QN, feedbackPositive);
 TeensyDAC DCDC;
 
 /*switch Truth-Table:
@@ -20,7 +28,7 @@ const float ADC_V_REF = 4.096;
 void setup(){
   clockInit();
   DCDC.dacSetup();
-  Serial.println(DCDC.dacOutput());
+  DCDC.disableDCDC();
   
   pinMode(NON_INVERT_PIN, OUTPUT);
   pinMode(INVERT_PIN, OUTPUT);
@@ -38,6 +46,10 @@ void setup(){
 
   Serial.begin(115200);
   Serial.println("Setup Worked");
+
+  pid.setOutputMin(250);
+  pid.setOutputMax(1370);
+  DCDC.enableDCDC();
 }
 
 void loop(){  
@@ -47,8 +59,9 @@ void loop(){
   }
 
   if(newSample) {
-    Serial.print((int32_t)code);
+    DCDC.setOutput(pid.compute(code));
     //Serial.print(codeToVoltage(code,ADC_V_REF),10);
+    Serial.print((int32_t)code);
     Serial.print(",");
     Serial.print(GPIOD_PDOR>>7 & 1U);
     Serial.print(",");
