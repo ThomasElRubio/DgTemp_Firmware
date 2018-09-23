@@ -13,11 +13,8 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <stdlib.h>
+#include <stdlib.h>   // abs()
 #include "pid.h"
-
-#define likely(x)       __builtin_expect(!!(x), 1)
-#define unlikely(x)     __builtin_expect(!!(x), 0)
 
 PID::PID(const uint32_t _setpoint, const int32_t kp, const int32_t ki, const int32_t kd, uint8_t _qn, FeedbackDirection _feedbackDirection, ProportionalGain proportionalGain)
     : feedbackDirection(_feedbackDirection), qn(_qn), setpoint(_setpoint) {
@@ -29,7 +26,6 @@ PID::PID(const uint32_t setpoint, const int32_t kp, const int32_t ki, const int3
 
 PID::PID(const uint32_t setpoint, const int32_t kp, const int32_t ki, const int32_t kd, uint8_t qn)
     :PID::PID(setpoint, kp, ki, kd, qn, feedbackNegative) {}
-
 
 /**
     Calculate a new output and store update all internal state variables. Note: The input is a simple number without
@@ -43,13 +39,11 @@ PID::PID(const uint32_t setpoint, const int32_t kp, const int32_t ki, const int3
     @param *output The output in Q(DAC_resolution).0 format and is determinded by the ki, kp, kd
       parameters used in the multiplications. The encoding is Offset Binary, so it directly be fed to most DACs.
 */
-uint32_t PID::compute(const uint32_t input) {
+const uint32_t PID::compute(const uint32_t input) {
     // Calcualte P term
     // Note: the calculation is (uint32_t)setpoint - (uint32_t)(input) = (int32_t)error (using signed math)
     // This is true for offset binary values!
-    const int32_t error = signed_subtract_saturated_32_and_32(setpoint, input);    // Subtract using saturating math
-	//Serial.print("ERROR: ");
-	//Serial.println(error);
+    const int32_t error = signed_subtract_saturated_32_and_32(this->setpoint, input);    // Subtract using saturating math
     // Calcualte I term
     // TODO: Think about taking into account the previous result as well
     // -> Bilinear Transform instead of Backward difference
@@ -65,12 +59,12 @@ uint32_t PID::compute(const uint32_t input) {
     //        = dSetpoint - dInput
     // We would like to get rid of the setpoint dependence and during normal operation, there is no difference
     //        ≈ -dInput
-    const int32_t dInputNegative = signed_subtract_saturated_32_and_32(previousInput, input);    // Subtract using saturating math
+    const int32_t dInputNegative = signed_subtract_saturated_32_and_32(this->previousInput, input);    // Subtract using saturating math
 
     // Store the input to calculate the D-term next time
     this->previousInput = input;
 
-    if (unlikely(proportionalGain == proportionalToInput)) {
+    if (UNLIKELY(proportionalGain == proportionalToInput)) {
         errorSum = signed_multiply_accumulate_saturated_32_and_32QN(
             this->errorSum,
             this->kp,
@@ -88,7 +82,7 @@ uint32_t PID::compute(const uint32_t input) {
     );
 
     // Normal PID
-    if (likely(proportionalGain == proportionalToError)) {
+    if (LIKELY(proportionalGain == proportionalToError)) {
         output = signed_multiply_accumulate_saturated_32_and_32QN(
             output,
             this->kp,
@@ -98,7 +92,7 @@ uint32_t PID::compute(const uint32_t input) {
 
     output = clamp(output, outputMin, outputMax);
     output ^= 0x80000000;   // Convert from 2s complement to offset Binary
-    return (uint32_t)output >> qn;
+    return (uint32_t)output >> this->qn;
 }
 
 /** Note: ki and kd must be normalized to the sampling time
@@ -124,7 +118,7 @@ void PID::setOutputMax(const uint32_t value) {
 }
 
 void PID::setSetpoint(const uint32_t value) {
-    this->setpoint = value ^ 0x80000000;
+    this->setpoint = value;
 }
 
 const uint32_t PID::getSetpoint() {
