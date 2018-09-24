@@ -19,8 +19,19 @@ static const uint32_t SPI_RESUME_TRANSACTION = 0b1 << 28;
 static const uint32_t SPI_END_TRANSACTION = 0b11 << 27;
 static const uint32_t CLEAR_FLAG[] = {0xFF0F0000};
 static const uint32_t data[] = {SPI_RESUME_TRANSACTION,SPI_END_TRANSACTION};
-volatile uint32_t code;
-volatile bool newSample = false;
+
+
+uint32_t getCode(){
+	return code;
+}
+
+bool sampleReceived(){
+	return newSample;
+}
+
+void waitForSample(){
+	newSample = false;
+}
 
 
 void clockInit(){
@@ -75,7 +86,7 @@ void initDmaSpi(){
   PORTA_PCR14 &= ~(0b111<<8);
   PORTA_PCR14 |= 1<<8;
   /* Bits 15-19 on the PCRx_PCRn register are responsible for the Type of Interrupt
-   * 1010 : Falling Edge Interrupt (Implemented by setting Bit 17 and 19)
+   * 0001 : Rising Edge Interrupt (Implemented by setting Bit 17 and 19)
    */
   PORTA_PCR14 &= ~(0b1111<<16);
   PORTA_PCR14 |= 1<<16; 

@@ -20,17 +20,17 @@
 
 
 
-
-
-extern volatile bool newSample;
-extern volatile uint32_t code;
+static volatile bool newSample;
+static volatile uint32_t code;
 
 void clockInit();
 void timerInit();
 void spiInit();
-//Interrupt-Service-Routines
-void ftmISR();
-void spi1ISR();
+uint32_t getCode();
+bool sampleReceived();
+void waitForSample();
+
+
 
 
 //void moduleClockGateEnable();
@@ -41,7 +41,9 @@ void spi1ISR();
 //void initSpiBus();
 void initDmaSpi();
 void enableDmaInterrupt();
-
+//Interrupt-Service-Routines
+void ftmISR();
+void spi1ISR();
 
 
 

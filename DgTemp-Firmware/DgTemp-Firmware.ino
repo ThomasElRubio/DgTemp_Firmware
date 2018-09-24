@@ -58,10 +58,10 @@ void loop(){
     Serial.read();
   }
 
-  if(newSample) {
-    DCDC.setOutput(pid.compute(code));
-    //Serial.print(codeToVoltage(code,ADC_V_REF),10);
-    Serial.print((int32_t)code);
+  if(sampleReceived()) {
+    DCDC.setOutput(pid.compute(getCode()));
+    //Serial.print(codeToVoltage(getCode(),ADC_V_REF),10);
+    Serial.print((int32_t)getCode());
     Serial.print(",");
     Serial.print(GPIOD_PDOR>>7 & 1U);
     Serial.print(",");
@@ -70,7 +70,7 @@ void loop(){
     Serial.print(SPI1_TCR>>16);
     Serial.print("\n");
     
-    newSample = false;
+    waitForSample();
   }
 }
 
