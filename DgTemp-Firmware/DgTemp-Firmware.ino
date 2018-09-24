@@ -2,7 +2,7 @@
 #include "src/AD5760/AD5760.h"
 #include "src/DgTemp/DgTemp.h"
 #include "src/TeensyDAC/TeensyDAC.h"
-#include "src/pid/pid.h"
+#include "src/PID/src/pid.h"
 #include <DMAChannel.h>
 
 

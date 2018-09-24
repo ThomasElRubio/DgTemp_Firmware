@@ -20,21 +20,39 @@
 
 
 
+
+
 extern volatile bool newSample;
 extern volatile uint32_t code;
-void ftmISR();
-void spi1_isr();
+
 void clockInit();
 void timerInit();
 void spiInit();
-void moduleClockGateEnable();
-void initClocks();
-void initFlexTimer();
+//Interrupt-Service-Routines
+void ftmISR();
+void spi1ISR();
+
+
+//void moduleClockGateEnable();
+//void initClocks();
+//void initFlexTimer();
 //static inline void initAdcClock();
-void timerCounterEnable(bool Enable);
-void initSpiBus();
+//void timerCounterEnable(bool Enable);
+//void initSpiBus();
 void initDmaSpi();
 void enableDmaInterrupt();
+
+
+
+
+
+
+
+
+static inline void moduleClockGateEnable(){
+	SIM_SCGC2 |= SIM_SCGC2_TPM2 | SIM_SCGC2_TPM1;       // Enable TPM2 Module
+	SIM_SCGC6 |= SIM_SCGC6_FTM0 | SIM_SCGC6_SPI0 | SIM_SCGC6_SPI1; // Enable FlexTimer,SPI0 and DMAMUX
+}
 
 
 static inline void initAdcClock(){  
@@ -91,6 +109,148 @@ static inline void initAdcClock(){
 	PORTB_PCR18 |= 1<<6; 
 }
 
+
+
+
+
+static inline void initClocks(){
+	//System Clock Divider Register 1 controls the prescalers of the Busclock, Core Clock etc.
+	SIM_CLKDIV1 |= SIM_CLKDIV1_OUTDIV2(0b0011);                     // Setting Bus Clock divider from 3 to 4 to get a 48MHz Bus-Clock (0b0011)
+	
+	//Stop all Counter by deselecting the clock
+	TPM1_SC &= (0b11<<3);                                           // TPM1_SC_CMOD: 00 -> Disable TPM1 counter 
+	TPM2_SC &= (0b11<<3);                                           // TPM1_SC_CMOD: 00 -> Disable TPM2 counter
+	
+	// Clear write Protection on FTM0 registers
+	if ((FTM0_FMS >> 6) & 1U) FTM0_MODE |= 1<<2;
+	FTM0_SC &= ~(0b11<<3);                                          // FTM0_SC_CLKS : 00 -> Disable FTM counter
+	
+	// Reset all Counter
+	FTM0_CNTIN = 0x00;                                               // Setting initial value of the counter to 0
+	FTM0_CNT = 0x00;                                                 // Writing any value to this counter resets the counter to its CNTIN value
+	TPM1_CNT = 0x00;                                                 // Writing any value to this register resets the counter to zero
+	TPM2_CNT = 0x00;                                                 // Writing any value to this register resets the counter to zero
+	
+	// Configuring all clocks that are needed for the counter modules to work
+	SIM_SCGC4 &= ~(SIM_SCGC4_USBOTG);                                // Disables clock at USB clock gate so the usb clock can be changed
+	SIM_SOPT2 |= SIM_SOPT2_PLLFLLSEL;                                // SIM_SOPT2[PLLFLLSEL] gate to control clock selection. Clearing this Bit changes Clock from IRC48M (48MHz) to MCGPLLCLK(192MHz)
+	SIM_CLKDIV2 |= 0b111<<1;                                         // SIM_CLKDIV2[USBDIV]: Clock division is now needed to get a clock of 48MHz. 
+	SIM_CLKDIV2 |= 1;                                                // SIM_CLKDIV2[USBFRAC]:
+	SIM_SCGC4 |= SIM_SCGC4_USBOTG;                                   // SIM_SCGC4[USBOTG]: Enables clock at USB clock gate
+	
+	
+	//TPM clock source select set to 0b01 to select MCGPLLCLK
+	SIM_SOPT2 |= 1<<24;                                              // [TPMSRC]
+	SIM_SOPT2 &= ~(1<<25);                                           // [TPMSRC]
+	FTM0_SC &= ~(1);      // Set FTM0_SC[PS] to 100 to get a prescaler of 16 which reduces the counter clock down to 3MHz
+	FTM0_SC &= ~(1<<1);
+	FTM0_SC |= 1<<2;
+}
+
+static inline void initFlexTimer(){
+	// Setting counter to up-counting mode
+	FTM0_SC &= ~(1<<5);	 	// Counter is in Up-Counting Mode. This is also needed to use Input-Capture-Mode
+	
+
+
+
+ 
+	//Setting one channel to Input capture mode to check if a glitch has occured by setting MSB,MSA,ELSB and ELSA as follows
+	//Channel Interrupt is not needed but can be utilized
+	FTM0_COMBINE &= (1<<2);   //DECAPEN: Disabling Dual Edge Capture Mode
+	FTM0_COMBINE &= ~(1);     //COMBINE: Disabling Combine feature for channels 0 and 1
+	FTM0_C0SC &= ~(1<<5);     //MSB
+	FTM0_C0SC &= ~(1<<4);     //MSA 
+	//Rising Edge
+	FTM0_C0SC &= ~(1<<3),     //ELSB
+	FTM0_C0SC |= 1<<2;        //ELSA
+	//Falling Edge
+	FTM0_C1SC &= ~(1<<5);     //MSB
+	FTM0_C1SC &= ~(1<<4);     //MSA 
+	FTM0_C1SC |= 1<<3;        //ELSB
+	FTM0_C1SC &= ~(1<<2);     //ELSA
+	SIM_SOPT8 |= 1;
+	FTM0_EXTTRIG |= 1<<6;     //Enabling Trigger at countervalue of 0 to trigger ADC-Clock module and Sync-Pulse Module
+  
+	//Enabling two Edge-Aligned PWM Channels to simulate a CS for two ADC
+	FTM0_C2SC |= 1<<5;        //MSB:MSA set to 1X
+	FTM0_C2SC &= ~(1<<3);
+	FTM0_C2SC |= 1<<2;
+	FTM0_C2V = 192;
+	FTM0_C3SC |= 1<<5;        //MSB:MSA set to 1X
+	FTM0_C3SC &= ~(1<<2);
+	FTM0_C3SC |= 1<<3;
+	FTM0_C3V = 192;
+	
+	
+	__disable_irq();
+	NVIC_ENABLE_IRQ(IRQ_FTM0);
+	attachInterruptVector(IRQ_FTM0, ftmISR);
+	FTM0_C0SC |= 1<<6;        		// Enable Channel Interrupt
+	__enable_irq();
+	
+	//Setting Counter Initvalue
+	FTM0_CNTIN = 0;         		//Setting this Register to 0 garanties a counter that always starts a 0
+	FTM0_MOD = (16384*3)-1;      	//Timeroverflow occours at Countervalue=MOD which resets the counter at a frequency of 61.02Hz
+	
+	//Setting Pin 22 of the Teensy 3.6 to FTM0_CH0 by using MUX alternative 4
+	PORTC_PCR1 |= 1<<10; 
+	PORTC_PCR1 &= ~(1<<9);
+	PORTC_PCR1 &= ~(1<<8); 
+	//Setting Pin 23 of the Teensy 3.6 to FTM0_CH1 by using MUX alternative 4
+	PORTC_PCR2 |= 1<<10; 
+	PORTC_PCR2 &= ~(1<<9);
+	PORTC_PCR2 &= ~(1<<8); 
+	
+	PORTC_PCR3 |= 1<<10;
+	PORTC_PCR3 &= ~(1<<9);
+	PORTC_PCR3 &= ~(1<<8);
+	PORTC_PCR4 |= 1<<10;
+	PORTC_PCR4 &= ~(1<<9);
+	PORTC_PCR4 &= ~(1<<8);
+}
+
+
+
+
+static inline void initSpiBus(){ 	
+	SPI1.begin();
+	SPI1.beginTransaction(SPISettings(500000, MSBFIRST, SPI_MODE0));
+	SPI1_CTAR1 |= 1<<2;
+	SPI1_CTAR1 &= ~(1<<1);
+	SPI1_CTAR1 |= 1;
+	SPI1_CTAR1 |= 1<<16;
+	//Setting delay between Interrupt an SCK and the delay between the transmission of two words to ensure a right timing
+	SPI1_CTAR1 &= ~(0b11<<22);
+	SPI1_CTAR1 &= ~(0b11<<20);
+	SPI1_CTAR1 &= ~(0b11<<18);
+	SPI1_CTAR1 &= ~(0b1111<<12);
+	SPI1_CTAR1 &= ~(0b1111<<8);
+	SPI1_CTAR1 &= ~(0b1111<<4);
+	SPI1_CTAR1 |= 0b0100<<12;
+	//SPI1_CTAR1 |= 0b0010<<4;
+	SPI1_CTAR1 |= 0b01<<20;
+	SPI1_CTAR1 |= 0b10<<18;
+} 
+
+
+
+
+static inline void timerCounterEnable(bool Enable){
+	if (Enable){
+		TPM1_SC |= 1<<3;         // Sets Bit 3 to 1 [CMOD] --> [CMOD]=0b01 TPM counter increments on every TPM counter clock
+		TPM2_SC |= 1<<3;         // Sets Bit 3 to 1 [CMOD] --> [CMOD]=0b01 TPM counter increments on every TPM counter clock
+		FTM0_SC |= 1<<3;         //Starting FTM Counter 
+		FTM0_FMS |= 1<<6;         //Writing a 1 to WPEN also clears FTM0_MODE[WPDIS] and enables write protection
+	}
+	else{
+		TPM1_SC &= ~(1<<4);       // Clears Bit 4 [CMOD]
+		TPM1_SC &= ~(1<<3);       // Clears Bit 3 [CMOD]
+		TPM2_SC &= ~(1<<4);       // Clears Bit 4 [CMOD]
+		TPM2_SC &= ~(1<<3);       // Clears Bit 3 [CMOD]
+		
+   }
+}
 
 
 
