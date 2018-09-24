@@ -27,7 +27,7 @@ DgTemp DgT;
 const float ADC_V_REF = 4.096;
 
 void setup(){
-  clockInit();
+  DgT.clockInit();
   DCDC.dacSetup();
   DCDC.disableDCDC();
   
@@ -43,7 +43,7 @@ void setup(){
   dac.setValue(39999);                      // DAC Setpoint is set
   
   spiInit();
-  timerInit();
+  DgT.timerInit();
 
   Serial.begin(115200);
   Serial.println("Setup Worked");
@@ -73,10 +73,9 @@ void loop(){
     
     waitForSample();
   }
-  delay(1000);
-  Serial.println(DgT.receivedSample());
+  
 }
-
+ 
 double codeToVoltage(const int32_t code, const float vref) {
   return ((double)code / 2147483647) * vref;
 }
