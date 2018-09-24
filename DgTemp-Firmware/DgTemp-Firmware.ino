@@ -30,6 +30,9 @@ void setup(){
   DgT.clockInit();
   DCDC.dacSetup();
   DCDC.disableDCDC();
+  pid.setOutputMin(250);
+  pid.setOutputMax(1370);
+  DCDC.enableDCDC();
   
   pinMode(NON_INVERT_PIN, OUTPUT);
   pinMode(INVERT_PIN, OUTPUT);
@@ -43,14 +46,12 @@ void setup(){
   dac.setValue(39999);                      // DAC Setpoint is set
   
   spiInit();
+  delay(10);
   DgT.timerInit();
-
   Serial.begin(115200);
   Serial.println("Setup Worked");
 
-  pid.setOutputMin(250);
-  pid.setOutputMax(1370);
-  DCDC.enableDCDC();
+  
 }
 
 void loop(){  
