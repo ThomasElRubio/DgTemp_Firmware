@@ -15,6 +15,7 @@
 AD5760 dac(CS_DAC);
 PID pid(SETPOINT, KP, KI, KD, QN, feedbackPositive);
 TeensyDAC DCDC;
+DgTemp DgT;
 
 /*switch Truth-Table:
  * 00: Non-Inverted
@@ -72,6 +73,8 @@ void loop(){
     
     waitForSample();
   }
+  delay(1000);
+  Serial.println(DgT.receivedSample());
 }
 
 double codeToVoltage(const int32_t code, const float vref) {

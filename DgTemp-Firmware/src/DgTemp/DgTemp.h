@@ -17,6 +17,16 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <DMAChannel.h>
+#include <stdint.h>
+
+
+
+
+
+
+
+
+
 
 
 
@@ -253,6 +263,30 @@ static inline void timerCounterEnable(bool Enable){
 		
    }
 }
+
+
+
+class DgTemp{
+	public:
+		DgTemp();
+		void cI();
+		void tI();
+		bool receivedSample();
+		void waitForSample();
+	private:
+		volatile uint32_t code;
+		volatile bool nS = false;
+		static const uint32_t CF[];
+	protected:
+		static const uint32_t SPI_RESUME_TRANSACTION = 0b1 << 28; 
+		static const uint32_t SPI_END_TRANSACTION = 0b11 << 27;
+		
+		
+		
+		//static const uint32_t data[0] = SPI_RESUME_TRANSACTION;
+		//static const uint32_t data[1] = SPI_END_TRANSACTION;
+};
+
 
 
 

@@ -21,6 +21,36 @@ static const uint32_t CLEAR_FLAG[] = {0xFF0F0000};
 static const uint32_t data[] = {SPI_RESUME_TRANSACTION,SPI_END_TRANSACTION};
 
 
+DgTemp::DgTemp() {
+
+}
+
+const uint32_t DgTemp::CF[] = {0xFF0F0000};
+
+void DgTemp::cI(){
+	moduleClockGateEnable();
+	//this->initClocks();
+	//this->moduleClockGateEnable();
+}
+
+
+void DgTemp::tI(){
+	
+}
+
+bool DgTemp::receivedSample(){
+	return this->nS;
+}
+
+void DgTemp::waitForSample(){
+	this->nS = false;
+}
+
+
+
+
+
+
 uint32_t getCode(){
 	return code;
 }
