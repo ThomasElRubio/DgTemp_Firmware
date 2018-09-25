@@ -21,53 +21,6 @@
 
 
 
-
-
-
-
-
-
-
-
-
-static volatile bool newSample;
-static volatile uint32_t code;
-
-//void clockInit();
-//void timerInit();
-void spiInit();
-uint32_t getCode();
-bool sampleReceived();
-void waitForSample();
-
-
-
-
-//void moduleClockGateEnable();
-//void initClocks();
-//void initFlexTimer();
-//static inline void initAdcClock();
-//void timerCounterEnable(bool Enable);
-//void initSpiBus();
-void initDmaSpi();
-void enableDmaInterrupt();
-//Interrupt-Service-Routines
-void ftmISR();
-void spi1ISR();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 class DgTemp{
 	public:
 		void clockInit();
@@ -101,11 +54,6 @@ class DgTemp{
 	protected:
 		static const uint32_t SPI_RESUME_TRANSACTION = 0b1 << 28; 
 		static const uint32_t SPI_END_TRANSACTION = 0b11 << 27;
-		
-		
-		
-		//static const uint32_t data[0] = SPI_RESUME_TRANSACTION;
-		//static const uint32_t data[1] = SPI_END_TRANSACTION;
 };
 
 

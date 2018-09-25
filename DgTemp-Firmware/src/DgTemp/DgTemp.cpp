@@ -132,11 +132,12 @@ void DgTemp::initClocks(){
 	TPM2_CNT = 0x00;                                                 // Writing any value to this register resets the counter to zero
 	
 	// Configuring all clocks that are needed for the counter modules to work
-	SIM_SCGC4 &= ~(SIM_SCGC4_USBOTG);                                // Disables clock at USB clock gate so the usb clock can be changed
-	SIM_SOPT2 |= SIM_SOPT2_PLLFLLSEL;                                // SIM_SOPT2[PLLFLLSEL] gate to control clock selection. Clearing this Bit changes Clock from IRC48M (48MHz) to MCGPLLCLK(192MHz)
-	SIM_CLKDIV2 |= 0b111<<1;                                         // SIM_CLKDIV2[USBDIV]: Clock division is now needed to get a clock of 48MHz. 
-	SIM_CLKDIV2 |= 1;                                                // SIM_CLKDIV2[USBFRAC]:
-	SIM_SCGC4 |= SIM_SCGC4_USBOTG;                                   // SIM_SCGC4[USBOTG]: Enables clock at USB clock gate
+	SIM_SCGC4 &= ~(SIM_SCGC4_USBOTG);                               // Disables clock at USB clock gate so the usb clock can be changed
+	SIM_SOPT2 &= ~(SIM_SOPT2_IRC48SEL); 								// Clear PLL/FLL clock select bits 
+	SIM_SOPT2 |= SIM_SOPT2_PLLFLLSEL;                               // SIM_SOPT2[PLLFLLSEL] gate to control clock selection. Clearing this Bit changes Clock from IRC48M (48MHz) to MCGPLLCLK(192MHz)
+	SIM_CLKDIV2 |= 0b111<<1;                                       // SIM_CLKDIV2[USBDIV]: Clock division is now needed to get a clock of 48MHz. 
+	SIM_CLKDIV2 |= 1;                                             // SIM_CLKDIV2[USBFRAC]:
+	SIM_SCGC4 |= SIM_SCGC4_USBOTG;                                  // SIM_SCGC4[USBOTG]: Enables clock at USB clock gate
 	
 	
 	//TPM clock source select set to 0b01 to select MCGPLLCLK

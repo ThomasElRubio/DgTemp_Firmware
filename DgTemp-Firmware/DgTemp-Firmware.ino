@@ -35,7 +35,7 @@ void setup(){
   pid.setOutputMax(4095);
   pid.updateOutput(2048);
   
-  Serial.begin(115200);
+  
   pinMode(NON_INVERT_PIN, OUTPUT);
   pinMode(INVERT_PIN, OUTPUT);
   digitalWrite(NON_INVERT_PIN, LOW);
@@ -49,6 +49,7 @@ void setup(){
   DgT.spiInit();
   DgT.timerInit();
   DCDC.enableDCDC();
+  Serial.begin(115200);
   Serial.println("Setup Worked");
   
   
