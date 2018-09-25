@@ -45,7 +45,7 @@ void setup(){
   dac.reset();                              // executes enableOutput
   dac.setValue(39999);                      // DAC Setpoint is set
   
-  spiInit();
+  DgT.spiInit();
   delay(10);
   DgT.timerInit();
   Serial.begin(115200);
@@ -60,10 +60,10 @@ void loop(){
     Serial.read();
   }
 
-  if(sampleReceived()) {
-    DCDC.setOutput(pid.compute(getCode()));
+  if(DgT.receivedSample()) {
+    DCDC.setOutput(pid.compute(DgT.getCode()));
     //Serial.print(codeToVoltage(getCode(),ADC_V_REF),10);
-    Serial.print((int32_t)getCode());
+    Serial.print((int32_t)DgT.getCode());
     Serial.print(",");
     Serial.print(GPIOD_PDOR>>7 & 1U);
     Serial.print(",");
@@ -72,7 +72,7 @@ void loop(){
     Serial.print(SPI1_TCR>>16);
     Serial.print("\n");
     
-    waitForSample();
+    DgT.waitForSample();
   }
   
 }

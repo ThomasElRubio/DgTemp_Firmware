@@ -1,29 +1,4 @@
-#######################################
-# Syntax Coloring Map
-#######################################
-
-#######################################
-# Datatypes (KEYWORD1)
-#######################################
-newSample	KEYWORD1
-code	KEYWORD1
-
-#######################################
-# Methods and Functions (KEYWORD2)
-#######################################
-clockInit	KEYWORD2
-timerInit	KEYWORD2
-spiInit	KEYWORD2
-timerCounterEnable	KEYWORD2
-
-
-######################################
-# Constants (LITERAL1)
-#######################################
-INVERT_PIN	LITERAL1
-NON_INVERT_PIN	LITERAL1
-NUMBER_OF_SAMPLES	LITERAL1
-SAMPLES_UNTIL_SETTLES	LITERAL1
+####################################### # Syntax Coloring Map ############################################################################### Datatypes (KEYWORD1)#######################################newSample	KEYWORD1code	KEYWORD1######################################## Methods and Functions (KEYWORD2)#######################################clockInit	KEYWORD2timerInit	KEYWORD2spiInit	KEYWORD2timerCounterEnable	KEYWORD2####################################### Constants (LITERAL1)#######################################INVERT_PIN	LITERAL1NON_INVERT_PIN	LITERAL1NUMBER_OF_SAMPLES	LITERAL1SAMPLES_UNTIL_SETTLES	LITERAL1
 
 
 
