@@ -108,54 +108,52 @@ void DgTemp::initDmaSpi(){
 
 
 void DgTemp::moduleClockGateEnable(){
-	SIM_SCGC2 |= SIM_SCGC2_TPM2 | SIM_SCGC2_TPM1;       // Enable TPM2 Module
-	SIM_SCGC6 |= SIM_SCGC6_FTM0 | SIM_SCGC6_SPI0 | SIM_SCGC6_SPI1; // Enable FlexTimer,SPI0 and DMAMUX
+	SIM_SCGC2 |= SIM_SCGC2_TPM2 | SIM_SCGC2_TPM1;       					// Enable TPM2 Module and TPM1 Module
+	SIM_SCGC6 |= SIM_SCGC6_FTM0 | SIM_SCGC6_SPI0 | SIM_SCGC6_SPI1; 			// Enable FlexTimer, SPI0 and SPI1
 }
 
 
 void DgTemp::initClocks(){
 	//System Clock Divider Register 1 controls the prescalers of the Busclock, Core Clock etc.
-	SIM_CLKDIV1 |= SIM_CLKDIV1_OUTDIV2(0b0011);                     // Setting Bus Clock divider from 3 to 4 to get a 48MHz Bus-Clock (0b0011)
+	SIM_CLKDIV1 |= SIM_CLKDIV1_OUTDIV2(0b0011);                     	// Setting Bus Clock divider from 3 to 4 to get a 48MHz Bus-Clock (0b0011)
 	
 	//Stop all Counter by deselecting the clock
-	TPM1_SC &= (0b11<<3);                                           // TPM1_SC_CMOD: 00 -> Disable TPM1 counter 
-	TPM2_SC &= (0b11<<3);                                           // TPM1_SC_CMOD: 00 -> Disable TPM2 counter
+	TPM1_SC &= (0b11<<3);                                       	// TPM1_SC[CMOD]: Clearing those bits(0b00) disables TPM1 counter 
+	TPM2_SC &= (0b11<<3);                                       	// TPM1_SC[CMOD]: Clearing those bits(0b00) disables TPM2 counter
 	
 	// Clear write Protection on FTM0 registers
 	if ((FTM0_FMS >> 6) & 1U) FTM0_MODE |= 1<<2;
-	FTM0_SC &= ~(0b11<<3);                                          // FTM0_SC_CLKS : 00 -> Disable FTM counter
+	FTM0_SC &= ~(0b11<<3);                                 		// FTM0_SC[CLKS] : Clearing those bits (ob00) disables FTM0 counter
 	
 	// Reset all Counter
-	FTM0_CNTIN = 0x00;                                               // Setting initial value of the counter to 0
-	FTM0_CNT = 0x00;                                                 // Writing any value to this counter resets the counter to its CNTIN value
-	TPM1_CNT = 0x00;                                                 // Writing any value to this register resets the counter to zero
-	TPM2_CNT = 0x00;                                                 // Writing any value to this register resets the counter to zero
+	FTM0_CNTIN = 0x00;                                           	// Setting initial value of the counter to 0
+	FTM0_CNT = 0x00;                                             	// Writing any value to this counter resets the counter to its CNTIN value
+	TPM1_CNT = 0x00;                                            	// Writing any value to this register resets the counter to zero
+	TPM2_CNT = 0x00;                                            	// Writing any value to this register resets the counter to zero
 	
 	// Configuring all clocks that are needed for the counter modules to work
-	SIM_SCGC4 &= ~(SIM_SCGC4_USBOTG);                               // Disables clock at USB clock gate so the usb clock can be changed
+	SIM_SCGC4 &= ~(SIM_SCGC4_USBOTG);                            	// Disables clock at USB clock gate so the usb clock can be changed
 	SIM_SOPT2 &= ~(SIM_SOPT2_IRC48SEL); 								// Clear PLL/FLL clock select bits 
-	SIM_SOPT2 |= SIM_SOPT2_PLLFLLSEL;                               // SIM_SOPT2[PLLFLLSEL] gate to control clock selection. Clearing this Bit changes Clock from IRC48M (48MHz) to MCGPLLCLK(192MHz)
-	SIM_CLKDIV2 |= 0b111<<1;                                       // SIM_CLKDIV2[USBDIV]: Clock division is now needed to get a clock of 48MHz. 
-	SIM_CLKDIV2 |= 1;                                             // SIM_CLKDIV2[USBFRAC]:
-	SIM_SCGC4 |= SIM_SCGC4_USBOTG;                                  // SIM_SCGC4[USBOTG]: Enables clock at USB clock gate
+	SIM_SOPT2 |= SIM_SOPT2_PLLFLLSEL;                             	// SIM_SOPT2[PLLFLLSEL] gate to control clock selection. Clearing Bit 17 and setting bit 16 changes Clock from IRC48M (48MHz) to MCGPLLCLK(192MHz)
+	SIM_CLKDIV2 |= 0b111<<1;                                       // SIM_CLKDIV2[USBDIV]: Setting USBDIV=7. Divider input clock=192MHz
+	SIM_CLKDIV2 |= 1;                                             // SIM_CLKDIV2[USBFRAC]: Setting USBFRAC=1. Divider output clock = Divider input clock × [ (USBFRAC+1) / (USBDIV+1) ]
+	SIM_SCGC4 |= SIM_SCGC4_USBOTG;                                	// SIM_SCGC4[USBOTG]: Enables clock at USB clock gate
 	
 	
 	//TPM clock source select set to 0b01 to select MCGPLLCLK
-	SIM_SOPT2 |= 1<<24;                                              // [TPMSRC]
-	SIM_SOPT2 &= ~(1<<25);                                           // [TPMSRC]
-	FTM0_SC &= ~(1);      // Set FTM0_SC[PS] to 100 to get a prescaler of 16 which reduces the counter clock down to 3MHz
-	FTM0_SC &= ~(1<<1);
-	FTM0_SC |= 1<<2;
+	SIM_SOPT2 |= 1<<24;                                      		// SIM_SOPT2[TPMSRC]: Setting bit 24 and clearing bit 25 selects PLLFLLCLK as the TPM clock
+	SIM_SOPT2 &= ~(1<<25);                                       	// SIM_SOPT2[TPMSRC]
+	//Setting prescaler of the FTM module counter
+	FTM0_SC &= ~(1);      										// FTM0_SC[PS]: Set FTM0_SC[PS] to 0b100 to get a prescaler of 16 which reduces the counter clock down to 3MHz
+	FTM0_SC &= ~(1<<1);											// FTM0_SC[PS]
+	FTM0_SC |= 1<<2;												// FTM0_SC[PS]
 }
 
 
 void DgTemp::initFlexTimer(){
 	// Setting counter to up-counting mode
-	FTM0_SC &= ~(1<<5);	 	// Counter is in Up-Counting Mode. This is also needed to use Input-Capture-Mode
+	FTM0_SC &= ~(1<<5);	 										// FTM0_SC[CPWMS]: Counter is in Up-Counting Mode. This is also needed to use Input-Capture-Mode
 	
-
-
-
  
 	//Setting one channel to Input capture mode to check if a glitch has occured by setting MSB,MSA,ELSB and ELSA as follows
 	//Channel Interrupt is not needed but can be utilized
