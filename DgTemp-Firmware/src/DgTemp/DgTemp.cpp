@@ -12,16 +12,16 @@
 
 
 
-volatile uint32_t recData[] = {0, 0};
+volatile uint32_t DgTemp::recData[] = {0, 0};
 
 
 const uint32_t DgTemp::CLEAR_FLAGS[] = {0xFF0F0000};
 const uint32_t DgTemp::data[] = {SPI_RESUME_TRANSACTION, SPI_END_TRANSACTION};
 volatile bool DgTemp::newSample = false;
 volatile uint32_t DgTemp::code = 0;
-DMAChannel DgTemp::tx = DMAChannel(0);
-DMAChannel DgTemp::rx = DMAChannel(1);
-DMAChannel DgTemp::Trigger = DMAChannel(2);
+DMAChannel DgTemp::tx = DMAChannel();
+DMAChannel DgTemp::rx = DMAChannel();
+DMAChannel DgTemp::Trigger = DMAChannel();
 
 
 void DgTemp::spi1ISR(void) {
@@ -60,7 +60,7 @@ void DgTemp::timerInit(){
 
 void DgTemp::spiInit(){
 	this->initSpiBus();
-	//this->initDmaSpi();
+	this->initDmaSpi();
 }
 
 
@@ -269,6 +269,7 @@ void DgTemp::initAdcClock(){
 
 void DgTemp::timerCounterEnable(bool Enable){
 	if (Enable){
+		FTM0_CNT = 0;
 		TPM1_SC |= 1<<3;         // Sets Bit 3 to 1 [CMOD] --> [CMOD]=0b01 TPM counter increments on every TPM counter clock
 		TPM2_SC |= 1<<3;         // Sets Bit 3 to 1 [CMOD] --> [CMOD]=0b01 TPM counter increments on every TPM counter clock
 		FTM0_SC |= 1<<3;         //Starting FTM Counter 

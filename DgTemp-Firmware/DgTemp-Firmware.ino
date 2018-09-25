@@ -33,22 +33,20 @@ void setup(){
   pid.setOutputMin(250);
   pid.setOutputMax(1370);
   DCDC.enableDCDC();
-  
+  Serial.begin(115200);
   pinMode(NON_INVERT_PIN, OUTPUT);
   pinMode(INVERT_PIN, OUTPUT);
   digitalWrite(NON_INVERT_PIN, LOW);
   digitalWrite(INVERT_PIN, LOW);
   
   dac.begin();                              // initialize the DAC_CS pin
-  SPI.begin();
-  delay(500);                               // Deleay needed between setting DAC_CS-Pin and the first SPI-Transaction (TODO: test for minimum duration)
+  SPI.begin();                              // Deleay needed between setting DAC_CS-Pin and the first SPI-Transaction (TODO: test for minimum duration)
   dac.reset();                              // executes enableOutput
   dac.setValue(39999);                      // DAC Setpoint is set
   
   DgT.spiInit();
-  delay(10);
   DgT.timerInit();
-  Serial.begin(115200);
+  
   Serial.println("Setup Worked");
 
   
@@ -62,7 +60,7 @@ void loop(){
 
   if(DgT.receivedSample()) {
     DCDC.setOutput(pid.compute(DgT.getCode()));
-    //Serial.print(codeToVoltage(getCode(),ADC_V_REF),10);
+    Serial.println(codeToVoltage(DgT.getCode(),ADC_V_REF),10);
     Serial.print((int32_t)DgT.getCode());
     Serial.print(",");
     Serial.print(GPIOD_PDOR>>7 & 1U);
@@ -71,7 +69,6 @@ void loop(){
     Serial.print(",");
     Serial.print(SPI1_TCR>>16);
     Serial.print("\n");
-    
     DgT.waitForSample();
   }
   
