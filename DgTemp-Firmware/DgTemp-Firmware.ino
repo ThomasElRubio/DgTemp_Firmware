@@ -7,10 +7,11 @@
 
 
 #define CS_DAC              8
-#define SETPOINT            285000000
-#define KP                  500
-#define KI                  0
-#define KD                  0
+#define SETPOINT            290000000
+#define KU                  850
+#define KP                  KU / 5
+#define KI                  KP /(67 / 2)
+#define KD                  KU * 67 / 3
 #define QN                  20
 AD5760 dac(CS_DAC);
 PID pid(SETPOINT, KP, KI, KD, QN, feedbackPositive);
@@ -30,9 +31,10 @@ void setup(){
   DgT.clockInit();
   DCDC.dacSetup();
   DCDC.disableDCDC();
-  pid.setOutputMin(250);
-  pid.setOutputMax(1370);
-  DCDC.enableDCDC();
+  pid.setOutputMin(1000);
+  pid.setOutputMax(4095);
+  pid.updateOutput(2048);
+  
   Serial.begin(115200);
   pinMode(NON_INVERT_PIN, OUTPUT);
   pinMode(INVERT_PIN, OUTPUT);
@@ -46,9 +48,9 @@ void setup(){
   
   DgT.spiInit();
   DgT.timerInit();
-  
+  DCDC.enableDCDC();
   Serial.println("Setup Worked");
-
+  
   
 }
 
@@ -59,9 +61,16 @@ void loop(){
   }
 
   if(DgT.receivedSample()) {
+    static bool initPid = true;
+    if(initPid){
+      pid.init(DgT.getCode());
+      initPid= false;
+    }
     DCDC.setOutput(pid.compute(DgT.getCode()));
-    Serial.println(codeToVoltage(DgT.getCode(),ADC_V_REF),10);
+    //Serial.println(codeToVoltage(DgT.getCode(),ADC_V_REF),10);
     Serial.print((int32_t)DgT.getCode());
+    Serial.print(",");
+    Serial.print(DCDC.dacOutput());
     Serial.print(",");
     Serial.print(GPIOD_PDOR>>7 & 1U);
     Serial.print(",");
