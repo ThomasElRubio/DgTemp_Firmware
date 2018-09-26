@@ -46,7 +46,7 @@ void DgTemp::ftm_ISR(void){
 void DgTemp::clockInit(){
 	this->moduleClockGateEnable();
 	this->initClocks();
-	this->moduleClockGateEnable();
+	this->moduleClockGateEnable();								// TODO: Check of this is redundant
 }
 
 
@@ -67,17 +67,18 @@ void DgTemp::spiInit(){
 
 void DgTemp::initDmaSpi(){
 	// Select Pin 26 for external DMA Trigger at DRL Pulse
-	PORTA_PCR14 &= ~(1);															
-	PORTA_PCR14 &= ~(1<<2);
-	PORTA_PCR14 &= ~(0b111<<8);
-	PORTA_PCR14 |= 1<<8;
+	//PORTA_PCR14 &= ~(1);						// PORTA_PCR14[PS]:  Probably not needed TODO: check functionality			
+	//PORTA_PCR14 &= ~(1<<2);					// PORTA_PCR14[SRE]: Not necessary because pin is not configured as output
+	PORTA_PCR14 &= ~(0b111<<8);					// PORTA_PCR14[MUX]: Clearing all bits in this part of the register
+	PORTA_PCR14 |= 1<<8;						// PORTA_PCR14[MUX]: Setting bit 8 select MUX alternative 1 which sets the PIN 26 to GPIO
 	/*	Bits 16-19 on the PCRx_PCRn register are responsible for the Type of Interrupt
-		0b0001 : Rising Edge DMA request (Implemented by setting Bit 16)*/
+		0b0001 : Rising Edge DMA request (Implemented by setting Bit 16)
+	*/
 	PORTA_PCR14 &= ~(0b1111<<16);				// PORTA_PCR14[IRQC]: Clearing all bits in this part of the registry	
 	PORTA_PCR14 |= 1<<16; 						// PORTA_PCR14[IRQC]: Setting bit 16 enables DMA request at a rising edge
 	
-	SPI1_RSER = 0x00;							//Clearing all bits disable all interrupts of the SPI1 bus 
 	
+	SPI1_RSER = 0x00;							//Clearing all bits disable all interrupts of the SPI1 bus 
 	/*	Enable all needed Interrupts:
 		SPI_RSER_EOQF_RE: EndOfQueue signals the end of a SPI-transaction
 		SPI_RSER_TFFF_RE: Enables request to Fill Transmit FIFO when it is empty 
@@ -91,29 +92,34 @@ void DgTemp::initDmaSpi(){
 		tx: This Channel fills the SPI1_PUSHR register which contains the configuration of the spi-transaction.
 		rx: This Channel reads the received data out of the spi receive buffer and saves it in an array
 		Trigger: This Channel is triggered when a rising edge of the DRL-Pulse is send from the ADC which clears all flags on the SPI1-Bus which enables the spi-transaction
+		During a DMA transfer the data is read in 8 bit steps. Therfore four steps are needed to transfer 32 bits of data
 	*/
-	tx.disable();																// Disable DMAChannel during setup
-	rx.disable();																// Disable DMAChannel during setup
-	Trigger.disable();															// Disable DMAChannel during setup
-	Trigger.sourceBuffer(CLEAR_FLAGS,4);											// Setting data source 
-	Trigger.destination((uint32_t &) SPI1_SR);
-	Trigger.triggerAtHardwareEvent(DMAMUX_SOURCE_PORTA);
-	rx.destinationBuffer(recData, 8);
-	rx.source((volatile uint32_t &) SPI1_POPR);
-	rx.triggerAtHardwareEvent(DMAMUX_SOURCE_SPI1_RX);
-	tx.sourceBuffer(data, 8);
-	tx.destination((volatile uint32_t &) SPI1_PUSHR);
-	tx.triggerAtHardwareEvent(DMAMUX_SOURCE_SPI1_TX);
-	tx.enable();
-	rx.enable();
-	Trigger.enable();
-
-
-  SPI1_MCR &= ~(1);
-  SPI1_TCR = 0x00;
-  
-  rx.interruptAtCompletion();
-  enableDmaInterrupt(); 
+	tx.disable();														// Disable DMAChannel during setup
+	rx.disable();														// Disable DMAChannel during setup
+	Trigger.disable();													// Disable DMAChannel during setup
+	
+	Trigger.sourceBuffer(CLEAR_FLAGS,4);									// Setting CLEAR_FLAGS array as data source of the DMA transfer. (
+	Trigger.destination((uint32_t &) SPI1_SR);							// Setting SPI1_SR as the destination address of this DMA transfer which writes the data of CLEAR_FLAGS into this register to clear all interrupt flags
+	Trigger.triggerAtHardwareEvent(DMAMUX_SOURCE_PORTA);					// Configure Trigger DMAChannel to start the transfer when PORTA flags a DMA request (DRL-pulse on PIN 26)
+	
+	rx.destinationBuffer(recData, 8);									// Setting the recData array as destination for the DMA transfer which writes all received data from the SPI Receive FIFO into recData
+	rx.source((volatile uint32_t &) SPI1_POPR);							// Setting SPI1_POPR which contains the received data of the ADC as the data source for this DMA transfer
+	rx.triggerAtHardwareEvent(DMAMUX_SOURCE_SPI1_RX);						// The rx DMA transfer starts when the Drain Receive FIFO event occurs
+	
+	tx.sourceBuffer(data, 8);											// Setting data array as the data source of the DMA transfer which contains the configuration of the spi transfer
+	tx.destination((volatile uint32_t &) SPI1_PUSHR);						// Setting SPI1_PUSHR as the destination of the DMA transfer
+	tx.triggerAtHardwareEvent(DMAMUX_SOURCE_SPI1_TX);						// The tx DMA transfer starts when the Fill Transmit FIFO event occurs
+	
+	tx.enable();														// Enable DMAChannel
+	rx.enable();														// Enable DMAChannel
+	Trigger.enable();													// Enable DMAChannel
+	
+	
+	SPI1_MCR &= ~(1);													// SPI1_MCR[HALT]: Clearing this bit enables the SPI1-Bus to transfer data
+	SPI1_TCR = 0x00;													// Writing any value to this register resets the SPI transfer counter value
+	
+	rx.interruptAtCompletion();											// Enables interrupt when after the rx DMA transfer is complete and all data from the ADC is received and saved
+	enableDmaInterrupt(); 												// Connect DMA-Interrupt with spi1_ISR which saves the data from recData an combines two 16 bit words from the spi trancations
 }
 
 
@@ -154,11 +160,10 @@ void DgTemp::initClocks(){
 	
 	//TPM clock source select set to 0b01 to select MCGPLLCLK
 	SIM_SOPT2 |= 1<<24;                                      		// SIM_SOPT2[TPMSRC]: Setting bit 24 and clearing bit 25 selects PLLFLLCLK as the TPM clock
-	SIM_SOPT2 &= ~(1<<25);                                       	// SIM_SOPT2[TPMSRC]
+	SIM_SOPT2 &= ~(1<<25);                                       	// SIM_SOPT2[TPMSRC]: Setting bit 24 and clearing bit 25 selects PLLFLLCLK as the TPM clock
 	//Setting prescaler of the FTM module counter
-	FTM0_SC &= ~(1);      										// FTM0_SC[PS]: Set FTM0_SC[PS] to 0b100 to get a prescaler of 16 which reduces the counter clock down to 3MHz
-	FTM0_SC &= ~(1<<1);											// FTM0_SC[PS]
-	FTM0_SC |= 1<<2;												// FTM0_SC[PS]
+	FTM0_SC &= ~(0b111);											// FTM0_SC[PS]: Clearing all bits in this part of the register
+	FTM0_SC |= 1<<2;												// FTM0_SC[PS]: Set FTM0_SC[PS] to 0b100 to get a prescaler of 16 which reduces the counter clock down to 3MHz
 }
 
 
@@ -169,18 +174,18 @@ void DgTemp::initFlexTimer(){
  
 	//Setting one channel to Input capture mode to check if a glitch has occured by setting MSB,MSA,ELSB and ELSA as follows
 	//Channel Interrupt is not needed but can be utilized
-	FTM0_COMBINE &= (1<<2);   //DECAPEN: Disabling Dual Edge Capture Mode
-	FTM0_COMBINE &= ~(1);     //COMBINE: Disabling Combine feature for channels 0 and 1
-	FTM0_C0SC &= ~(1<<5);     //MSB
-	FTM0_C0SC &= ~(1<<4);     //MSA 
-	//Rising Edge
-	FTM0_C0SC &= ~(1<<3),     //ELSB
-	FTM0_C0SC |= 1<<2;        //ELSA
-	//Falling Edge
-	FTM0_C1SC &= ~(1<<5);     //MSB
-	FTM0_C1SC &= ~(1<<4);     //MSA 
-	FTM0_C1SC |= 1<<3;        //ELSB
-	FTM0_C1SC &= ~(1<<2);     //ELSA
+	FTM0_COMBINE &= (1<<2);   									//FTM0_COMBINE[DECAPEN]: Disabling Dual Edge Capture Mode
+	FTM0_COMBINE &= ~(1);     									//FTM0_COMBINE[COMBINE]: Disabling Combine feature for channels 0 and 1
+	// Configure channel 0 to detect a rising edge
+	FTM0_C0SC &= ~(1<<5);    									//MSB
+	FTM0_C0SC &= ~(1<<4);     									//MSA 
+	FTM0_C0SC &= ~(1<<3),     									//ELSB
+	FTM0_C0SC |= 1<<2;        								//ELSA
+	// Configure channel 1 to detect a falling edge (Not used but nice to have)
+	FTM0_C1SC &= ~(1<<5);     									//MSB
+	FTM0_C1SC &= ~(1<<4);     									//MSA 
+	FTM0_C1SC |= 1<<3;        								//ELSB
+	FTM0_C1SC &= ~(1<<2);     									//ELSA
 	SIM_SOPT8 |= 1;
 	FTM0_EXTTRIG |= 1<<6;     //Enabling Trigger at countervalue of 0 to trigger ADC-Clock module and Sync-Pulse Module
   
@@ -327,7 +332,7 @@ void DgTemp::waitForSample(){
 }
 
 
-
+// Connect DMA-Interrupt with spi1_ISR which saves the data from recData an combines two 16 bit words from the spi trancations
 void DgTemp::enableDmaInterrupt(){
 	__disable_irq();
 	NVIC_ENABLE_IRQ(IRQ_DMA_CH1);
