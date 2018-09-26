@@ -13,8 +13,6 @@
 
 
 volatile uint32_t DgTemp::recData[] = {0, 0};
-
-
 const uint32_t DgTemp::CLEAR_FLAGS[] = {0xFF0F0000};
 const uint32_t DgTemp::data[] = {SPI_RESUME_TRANSACTION, SPI_END_TRANSACTION};
 volatile bool DgTemp::newSample = false;
@@ -24,6 +22,7 @@ DMAChannel DgTemp::rx = DMAChannel();
 DMAChannel DgTemp::Trigger = DMAChannel();
 
 
+// Interrupt-Service-Routine that saves the received data from the ADC
 void DgTemp::spi1ISR(void) {
   rx.clearInterrupt();
   code = recData[0];
@@ -33,15 +32,15 @@ void DgTemp::spi1ISR(void) {
 
 
 
-
+// Interrupt-Service-Routine that controls the inversion of the current
 void DgTemp::ftm_ISR(void){
-	FTM0_STATUS;                                        // To clear FTM channel interrupt the FTM0_Satus register must be read and cleared by writing a 0 to it afterwards
-	FTM0_STATUS = 0;                                    // Writing a 0 to the FTM0_STATUS register clears all interrupts on all channels
-	//GPIOA_PTOR |= (!(SPI1_TCR % (2*(NUMBER_OF_SAMPLES + SAMPLES_UNTIL_SETTLES)<<16)))<<13;
-	//GPIOD_PTOR |= (!(SPI1_TCR % (2*(NUMBER_OF_SAMPLES + SAMPLES_UNTIL_SETTLES)<<16)))<<7;
+	FTM0_STATUS;                                       					 				// To clear FTM channel interrupt the FTM0_Satus register must be read and cleared by writing a 0 to it afterwards
+	FTM0_STATUS = 0;                                    									// Writing a 0 to the FTM0_STATUS register clears all interrupts on all channels
+	
+	// Inverting of Current
+	//GPIOA_PTOR |= (!(SPI1_TCR % (2*(NUMBER_OF_SAMPLES + SAMPLES_UNTIL_SETTLES)<<16)))<<13;			// This line toogles the output of the PIN 4 after (NUMBER_OF_SAMPLES + SAMPLES_UNTIL_SETTLES) are made
+	//GPIOD_PTOR |= (!(SPI1_TCR % (2*(NUMBER_OF_SAMPLES + SAMPLES_UNTIL_SETTLES)<<16)))<<7;			// This line toogles the output of the PIN 5 after (NUMBER_OF_SAMPLES + SAMPLES_UNTIL_SETTLES) are made
 }
-
-
 
 
 void DgTemp::clockInit(){
@@ -67,23 +66,36 @@ void DgTemp::spiInit(){
 
 
 void DgTemp::initDmaSpi(){
-	// Select Pin 26 for external DMA Trigger at DRl Pulse
-	PORTA_PCR14 &= ~(1);
+	// Select Pin 26 for external DMA Trigger at DRL Pulse
+	PORTA_PCR14 &= ~(1);															
 	PORTA_PCR14 &= ~(1<<2);
 	PORTA_PCR14 &= ~(0b111<<8);
 	PORTA_PCR14 |= 1<<8;
-	/* Bits 15-19 on the PCRx_PCRn register are responsible for the Type of Interrupt
-	* 0001 : Rising Edge Interrupt (Implemented by setting Bit 17 and 19)
-	*/
-	PORTA_PCR14 &= ~(0b1111<<16);
-	PORTA_PCR14 |= 1<<16; 
+	/*	Bits 16-19 on the PCRx_PCRn register are responsible for the Type of Interrupt
+		0b0001 : Rising Edge DMA request (Implemented by setting Bit 16)*/
+	PORTA_PCR14 &= ~(0b1111<<16);				// PORTA_PCR14[IRQC]: Clearing all bits in this part of the registry	
+	PORTA_PCR14 |= 1<<16; 						// PORTA_PCR14[IRQC]: Setting bit 16 enables DMA request at a rising edge
 	
-	SPI1_RSER = 0x00;
-	SPI1_RSER = SPI_RSER_EOQF_RE | SPI_RSER_TFFF_RE | SPI_RSER_TFFF_DIRS | SPI_RSER_RFDF_RE | SPI_RSER_RFDF_DIRS;
-	tx.disable();
-	rx.disable();
-	Trigger.disable();
-	Trigger.sourceBuffer(CLEAR_FLAGS,4);
+	SPI1_RSER = 0x00;							//Clearing all bits disable all interrupts of the SPI1 bus 
+	
+	/*	Enable all needed Interrupts:
+		SPI_RSER_EOQF_RE: EndOfQueue signals the end of a SPI-transaction
+		SPI_RSER_TFFF_RE: Enables request to Fill Transmit FIFO when it is empty 
+		SPI_RSER_TFFF_DIRS: Selects DMA request for the Fill Transmit FIFO event
+		SPI_RSER_RFDF_RE: Enables request to Drain Receive FIFO when it is full
+		SPI_RSER_RFDF_DIRS: Selects DMA request for the Drain Receive FIFO event
+	*/
+	SPI1_RSER = SPI_RSER_EOQF_RE | SPI_RSER_TFFF_RE | SPI_RSER_TFFF_DIRS | SPI_RSER_RFDF_RE | SPI_RSER_RFDF_DIRS;	
+	/*
+		Setup of the DMAChannels
+		tx: This Channel fills the SPI1_PUSHR register which contains the configuration of the spi-transaction.
+		rx: This Channel reads the received data out of the spi receive buffer and saves it in an array
+		Trigger: This Channel is triggered when a rising edge of the DRL-Pulse is send from the ADC which clears all flags on the SPI1-Bus which enables the spi-transaction
+	*/
+	tx.disable();																// Disable DMAChannel during setup
+	rx.disable();																// Disable DMAChannel during setup
+	Trigger.disable();															// Disable DMAChannel during setup
+	Trigger.sourceBuffer(CLEAR_FLAGS,4);											// Setting data source 
 	Trigger.destination((uint32_t &) SPI1_SR);
 	Trigger.triggerAtHardwareEvent(DMAMUX_SOURCE_PORTA);
 	rx.destinationBuffer(recData, 8);

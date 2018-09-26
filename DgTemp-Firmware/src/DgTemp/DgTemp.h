@@ -6,10 +6,6 @@
 #define NON_INVERT_PIN			5
 #define NUMBER_OF_SAMPLES 		504
 #define SAMPLES_UNTIL_SETTLES	8
-//#define newSample				false
-
-
-
 
 
 
