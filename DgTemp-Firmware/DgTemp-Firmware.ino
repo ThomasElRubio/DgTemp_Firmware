@@ -2,19 +2,21 @@
 #include "src/AD5760/AD5760.h"
 #include "src/DgTemp/DgTemp.h"
 #include "src/TeensyDAC/TeensyDAC.h"
-#include "src/PID/src/pid.h"
+#include "src/pidlib/src/pid.h"
 #include <DMAChannel.h>
 
-
+//3650  1710
 #define CS_DAC              8
-#define SETPOINT            290000000
-#define KU                  850
-#define KP                  KU / 5
-#define KI                  KP /(67 / 2)
-#define KD                  KU * 67 / 3
+#define SETPOINT            252000000
+static double const  KP= 0.0005*2*5*0.5*0.5*0.9*0.9*0.9;
+#define TU                  65
+#define SAMPLING_FREQUENCY  61
+//#define KP                  KU 
+//#define KI                  0.0d //KP *2 / TU / SAMPLING_FREQUENCY
+//#define KD                  0.0d //KP * TU * 10 * SAMPLING_FREQUENCY / 3 
 #define QN                  20
 AD5760 dac(CS_DAC);
-PID pid(SETPOINT, KP, KI, KD, QN, feedbackPositive);
+PID pid(SETPOINT, KP, 0, 0, QN, feedbackPositive);
 TeensyDAC DCDC;
 DgTemp DgT;
 
@@ -31,9 +33,9 @@ void setup(){
   DgT.clockInit();
   DCDC.dacSetup();
   DCDC.disableDCDC();
-  pid.setOutputMin(1000);
+  pid.setOutputMin(0);
   pid.setOutputMax(4095);
-  pid.updateOutput(2048);
+  //pid.updateOutput(2048);
   
   
   pinMode(NON_INVERT_PIN, OUTPUT);
@@ -69,7 +71,7 @@ void loop(){
     }
     DCDC.setOutput(pid.compute(DgT.getCode()));
     //Serial.println(codeToVoltage(DgT.getCode(),ADC_V_REF),10);
-    Serial.print((int32_t)DgT.getCode());
+    Serial.print(DgT.getCode());
     Serial.print(",");
     Serial.print(DCDC.dacOutput());
     Serial.print(",");
