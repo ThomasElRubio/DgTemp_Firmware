@@ -12,11 +12,11 @@ static double const KU                 = 0.0005*2*5*0.5*0.5*0.9*0.9*0.9;
 static double const TU                 = 65.0;
 static double const SAMPLING_FREQUENCY = 61.0;
 static double const KP                 = KU / 5.0;
-static double const KI                 = KP * 2 / TU / SAMPLING_FREQUENCY;
+static double const KI                 = KP * 2.0 / TU / SAMPLING_FREQUENCY;
 static double const KD                 = KP * TU * SAMPLING_FREQUENCY / 3.0;
 #define QN                  20
 AD5760 dac(CS_DAC);
-PID pid(SETPOINT, KP, 0, 0, QN, feedbackPositive);
+PID pid(SETPOINT, KP, KI, KD, QN, feedbackPositive);
 TeensyDAC DCDC;
 DgTemp DgT;
 
