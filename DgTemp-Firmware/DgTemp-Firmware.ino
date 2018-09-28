@@ -8,12 +8,12 @@
 //3650  1710
 #define CS_DAC              8
 #define SETPOINT            252000000
-static double const  KP= 0.0005*2*5*0.5*0.5*0.9*0.9*0.9;
-#define TU                  65
-#define SAMPLING_FREQUENCY  61
-//#define KP                  KU 
-//#define KI                  0.0d //KP *2 / TU / SAMPLING_FREQUENCY
-//#define KD                  0.0d //KP * TU * 10 * SAMPLING_FREQUENCY / 3 
+static double const KU                 = 0.0005*2*5*0.5*0.5*0.9*0.9*0.9;
+static double const TU                 = 65.0;
+static double const SAMPLING_FREQUENCY = 61.0;
+static double const KP                 = KU / 5.0;
+static double const KI                 = KP * 2 / TU / SAMPLING_FREQUENCY;
+static double const KD                 = KP * TU * SAMPLING_FREQUENCY / 3.0;
 #define QN                  20
 AD5760 dac(CS_DAC);
 PID pid(SETPOINT, KP, 0, 0, QN, feedbackPositive);
@@ -35,7 +35,7 @@ void setup(){
   DCDC.disableDCDC();
   pid.setOutputMin(0);
   pid.setOutputMax(4095);
-  //pid.updateOutput(2048);
+  pid.updateOutput(2048);
   
   
   pinMode(NON_INVERT_PIN, OUTPUT);
@@ -71,16 +71,8 @@ void loop(){
     }
     DCDC.setOutput(pid.compute(DgT.getCode()));
     //Serial.println(codeToVoltage(DgT.getCode(),ADC_V_REF),10);
-    Serial.print(DgT.getCode());
-    Serial.print(",");
-    Serial.print(DCDC.dacOutput());
-    Serial.print(",");
-    Serial.print(GPIOD_PDOR>>7 & 1U);
-    Serial.print(",");
-    Serial.print(FTM0_C0V);     //Print Channel Value at rising flank of the DRL pulse
-    Serial.print(",");
-    Serial.print(SPI1_TCR>>16);
-    Serial.print("\n");
+    // FTM0_C0V: Print Channel Value at rising flank of the DRL pulse
+    Serial.printf("%u,%u,%u,%u,%u\n", DgT.getCode(), DCDC.dacOutput(), GPIOD_PDOR>>7 & 1U, FTM0_C0V, SPI1_TCR>>16);
     DgT.waitForSample();
   }
   
