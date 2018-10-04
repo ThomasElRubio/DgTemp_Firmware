@@ -7,13 +7,13 @@
 
 //3650  1710
 #define CS_DAC              8
-#define SETPOINT            252000000
-static double const KU                 = 0.0005*2*5*0.5*0.5*0.9*0.9*0.9;
+#define SETPOINT            285000000
+static double const KU                 = 0.00091125;      //0.0005*2*5*0.5*0.5*0.9*0.9*0.9;
 static double const TU                 = 65.0;
 static double const SAMPLING_FREQUENCY = 61.0;
-static double const KP                 = KU / 5.0;
-static double const KI                 = KP * 2.0 / TU / SAMPLING_FREQUENCY;
-static double const KD                 = KP * TU * SAMPLING_FREQUENCY / 3.0;
+static double const KP                 = 0.000379;     //KU / 5.0;
+static double const KI                 = 0.00000005976143046459762;     //KP * 2.0 / TU / SAMPLING_FREQUENCY;
+static double const KD                 = 0.0003782486590412;     //KP * TU * SAMPLING_FREQUENCY / 3.0;
 #define QN                  20
 AD5760 dac(CS_DAC);
 PID pid(SETPOINT, KP, KI, KD, QN, feedbackPositive);
