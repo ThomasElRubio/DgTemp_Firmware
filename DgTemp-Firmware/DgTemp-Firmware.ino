@@ -1,13 +1,15 @@
 #include <SPI.h>
 #include "src/AD5760/AD5760.h"
+#include "src/AD5680/AD5680.h"
 #include "src/DgTemp/DgTemp.h"
 #include "src/TeensyDAC/TeensyDAC.h"
 #include "src/pidlib/src/pid.h"
 #include <DMAChannel.h>
 
 //3650  1710
-#define CS_DAC              8
-#define SETPOINT            285000000
+#define CS_AD5760              8
+#define CS_AD5680              7
+#define SETPOINT            300000000
 static double const KU                 = 0.00091125;      //0.0005*2*5*0.5*0.5*0.9*0.9*0.9;
 static double const TU                 = 65.0;
 static double const SAMPLING_FREQUENCY = 61.0;
@@ -15,7 +17,8 @@ static double const KP                 = 0.000379;     //KU / 5.0;
 static double const KI                 = 0.00000005976143046459762;     //KP * 2.0 / TU / SAMPLING_FREQUENCY;
 static double const KD                 = 0.0003782486590412;     //KP * TU * SAMPLING_FREQUENCY / 3.0;
 #define QN                  20
-AD5760 dac(CS_DAC);
+AD5760 dac(CS_AD5760);
+AD5680 pidDac(CS_AD5680);
 PID pid(SETPOINT, KP, KI, KD, QN, feedbackPositive);
 TeensyDAC DCDC;
 DgTemp DgT;
@@ -33,9 +36,14 @@ void setup(){
   DgT.clockInit();
   DCDC.dacSetup();
   DCDC.disableDCDC();
+  
+  pidDac.begin();
+  delay(10);
+  pidDac.setValue(0x1FFFF);
+  
   pid.setOutputMin(0);
-  pid.setOutputMax(4095);
-  pid.updateOutput(2048);
+  pid.setOutputMax(0x3FFFF);
+  pid.updateOutput(0x1FFFF);
   
   
   pinMode(NON_INVERT_PIN, OUTPUT);
@@ -43,7 +51,8 @@ void setup(){
   digitalWrite(NON_INVERT_PIN, LOW);
   digitalWrite(INVERT_PIN, LOW);
   
-  dac.begin();                              // initialize the DAC_CS pin
+  dac.begin();  // initialize the DAC_CS pin
+  delay(10);
   SPI.begin();                              // Deleay needed between setting DAC_CS-Pin and the first SPI-Transaction (TODO: test for minimum duration)
   dac.reset();                              // executes enableOutput
   dac.setValue(39999);                      // DAC Setpoint is set
@@ -69,13 +78,12 @@ void loop(){
       pid.init(DgT.getCode());
       initPid= false;
     }
-    DCDC.setOutput(pid.compute(DgT.getCode()));
+    pidDac.setValue(pid.compute(DgT.getCode()));
     //Serial.println(codeToVoltage(DgT.getCode(),ADC_V_REF),10);
     // FTM0_C0V: Print Channel Value at rising flank of the DRL pulse
-    Serial.printf("%u,%u,%u,%u,%u\n", DgT.getCode(), DCDC.dacOutput(), GPIOD_PDOR>>7 & 1U, FTM0_C0V, SPI1_TCR>>16);
+    Serial.printf("%u,%u,%u,%u\n", DgT.getCode(), GPIOD_PDOR>>7 & 1U, FTM0_C0V, SPI1_TCR>>16);
     DgT.waitForSample();
   }
-  
 }
  
 double codeToVoltage(const int32_t code, const float vref) {

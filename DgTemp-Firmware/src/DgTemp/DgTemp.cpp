@@ -79,6 +79,7 @@ void DgTemp::initDmaSpi(){
 	
 	
 	SPI1_RSER = 0x00;							//Clearing all bits disable all interrupts of the SPI1 bus 
+	
 	/*	Enable all needed Interrupts:
 		SPI_RSER_EOQF_RE: EndOfQueue signals the end of a SPI-transaction
 		SPI_RSER_TFFF_RE: Enables request to Fill Transmit FIFO when it is empty 
@@ -176,11 +177,13 @@ void DgTemp::initFlexTimer(){
 	//Channel Interrupt is not needed but can be utilized
 	FTM0_COMBINE &= (1<<2);   									//FTM0_COMBINE[DECAPEN]: Disabling Dual Edge Capture Mode
 	FTM0_COMBINE &= ~(1);     									//FTM0_COMBINE[COMBINE]: Disabling Combine feature for channels 0 and 1
+	
 	// Configure channel 0 to capture counter value when it detects a rising edge
-	FTM0_C0SC &= ~(1<<5);    									//MSB
+	FTM0_C0SC &= ~(1<<5);    									//MSB 
 	FTM0_C0SC &= ~(1<<4);     									//MSA 
 	FTM0_C0SC &= ~(1<<3),     									//ELSB
 	FTM0_C0SC |= 1<<2;        								//ELSA
+	
 	// Configure channel 1  to capture counter value when it detects a falling edge (Not used but nice to have)
 	FTM0_C1SC &= ~(1<<5);     									//MSB
 	FTM0_C1SC &= ~(1<<4);     									//MSA 
