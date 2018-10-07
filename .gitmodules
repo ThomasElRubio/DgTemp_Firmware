@@ -1,0 +1,3 @@
+[submodule "DgTemp-Firmware/src/pidlib"]
+	path = DgTemp-Firmware/src/pidlib
+	url = https://github.com/TU-Darmstadt-APQ/PID-CPP.git
