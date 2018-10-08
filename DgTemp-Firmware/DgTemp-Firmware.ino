@@ -13,15 +13,15 @@
 static double const KU                 = 0.00091125;      //0.0005*2*5*0.5*0.5*0.9*0.9*0.9;
 static double const TU                 = 65.0;
 static double const SAMPLING_FREQUENCY = 61.0;
-static double const KP                 = 0.000379;     //KU / 5.0;
-static double const KI                 = 0.00000005976143046459762;     //KP * 2.0 / TU / SAMPLING_FREQUENCY;
-static double const KD                 = 0.0003782486590412;     //KP * TU * SAMPLING_FREQUENCY / 3.0;
+static double const KP                 = 0.000379 * 64;
+static double const KI                 = 0.00000005976143046459762 * 64;     //KP * 2.0 / TU / SAMPLING_FREQUENCY;
+static double const KD                 = 0.0003782486590412 * 64;     //KP * TU * SAMPLING_FREQUENCY / 3.0;
 #define QN                  20
 AD5760 dac(CS_AD5760);
 AD5680 pidDac(CS_AD5680);
 PID pid(SETPOINT, KP, KI, KD, QN, feedbackPositive);
 TeensyDAC DCDC;
-DgTemp DgT;
+DgTemp dgTemp;
 
 /*switch Truth-Table:
  * 00: Non-Inverted
@@ -33,7 +33,7 @@ DgTemp DgT;
 const float ADC_V_REF = 4.096;
 
 void setup(){
-  DgT.clockInit();
+  dgTemp.clockInit();
   DCDC.dacSetup();
   DCDC.disableDCDC();
   
@@ -57,8 +57,8 @@ void setup(){
   dac.reset();                              // executes enableOutput
   dac.setValue(39999);                      // DAC Setpoint is set
   
-  DgT.spiInit();
-  DgT.timerInit();
+  dgTemp.spiInit();
+  dgTemp.timerInit();
   DCDC.enableDCDC();
   Serial.begin(115200);
   Serial.println("Setup Worked");
@@ -72,17 +72,19 @@ void loop(){
     Serial.read();
   }
 
-  if(DgT.receivedSample()) {
+  if(dgTemp.receivedSample()) {
     static bool initPid = true;
     if(initPid){
-      pid.init(DgT.getCode());
+      pid.init(dgTemp.getCode());
       initPid= false;
     }
-    pidDac.setValue(pid.compute(DgT.getCode()));
+    uint32_t inputValue = dgTemp.getCode();
+    uint32_t outputValue = pid.compute(inputValue);
+    pidDac.setValue(outputValue);
     //Serial.println(codeToVoltage(DgT.getCode(),ADC_V_REF),10);
     // FTM0_C0V: Print Channel Value at rising flank of the DRL pulse
-    Serial.printf("%u,%u,%u,%u\n", DgT.getCode(), GPIOD_PDOR>>7 & 1U, FTM0_C0V, SPI1_TCR>>16);
-    DgT.waitForSample();
+    Serial.printf("%u,%u,%u,%u,%u\n", inputValue, outputValue, GPIOD_PDOR>>7 & 1U, FTM0_C0V, SPI1_TCR>>16);
+    dgTemp.waitForSample();
   }
 }
  
