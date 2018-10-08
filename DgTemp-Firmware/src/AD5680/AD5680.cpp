@@ -12,6 +12,11 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+#ifdef ARDUINO_AD5762R_DEBUG
+  #include <Arduino.h>
+#endif
+
 #include "AD5680.h"
 
 #define AD5680_SPI_CLOCK_FREQ (1*1000*120)   // 30 MHz SPI clock is the maximum specified
@@ -50,10 +55,9 @@ void AD5680::writeSPI(uint32_t value) {
 
 // value is an 18-bit value
 void AD5680::setValue(uint32_t value) {
-  Serial.print(value);
-  Serial.print(",");
   #ifdef ARDUINO_AD5762R_DEBUG
-  Serial.println("Setting DAC value:");
+  Serial.print("Setting DAC value:");
+  Serial.println(value);
   #endif
   uint32_t command = this->RESERVED_BITS | ((value << 2) & 0xFFFFF);
   
