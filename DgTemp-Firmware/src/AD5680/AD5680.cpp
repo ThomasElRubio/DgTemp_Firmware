@@ -29,7 +29,7 @@ AD5680::AD5680(uint8_t cs_pin, SPIClass* _spi) : cs_pin(cs_pin), spi(_spi), spi_
 void AD5680::writeSPI(const uint32_t value) {
   this->spi->beginTransaction(this->spi_settings);
 
-  digitalWrite(this->cs_pin, LOW);
+  digitalWriteFast(this->cs_pin, LOW);
   delayMicroseconds(10);
 
   #ifdef ARDUINO_AD5762R_DEBUG
@@ -45,7 +45,7 @@ void AD5680::writeSPI(const uint32_t value) {
   this->spi->transfer((value >> 0) & 0xFF);
   delayMicroseconds(10);
 
-  digitalWrite(this->cs_pin, HIGH);
+  digitalWriteFast(this->cs_pin, HIGH);
   delayMicroseconds(10);
   this->spi->endTransaction();
 }
