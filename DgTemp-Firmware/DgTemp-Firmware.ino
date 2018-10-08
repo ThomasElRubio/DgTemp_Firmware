@@ -18,7 +18,7 @@ static double const KI                 = 0.00000005976143046459762 * 64;     //K
 static double const KD                 = 0.0003782486590412 * 64;     //KP * TU * SAMPLING_FREQUENCY / 3.0;
 #define QN                  20
 AD5760 dac(CS_AD5760);
-AD5680 pidDac(CS_AD5680);
+AD5680 pidDac(CS_AD5680, &SPI);
 PID pid(SETPOINT, KP, KI, KD, QN, feedbackPositive);
 TeensyDAC DCDC;
 DgTemp dgTemp;
@@ -61,9 +61,6 @@ void setup(){
   dgTemp.timerInit();
   DCDC.enableDCDC();
   Serial.begin(115200);
-  Serial.println("Setup Worked");
-  
-  
 }
 
 void loop(){  

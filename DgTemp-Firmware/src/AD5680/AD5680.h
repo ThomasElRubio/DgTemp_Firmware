@@ -17,30 +17,21 @@
 
 // #define ARDUINO_AD5762R_DEBUG
 
-#include <Arduino.h>
-// include the SPI library:
 #include <SPI.h>
 
 class AD5680 {
   public:
-    AD5680(uint8_t cs_pin);
-    void setValue(uint32_t value);
+    AD5680(uint8_t cs_pin, SPIClass* _spi);
+    void setValue(const uint32_t value);
     void begin();
-	void writeSPI(uint32_t value);
+    void writeSPI(const uint32_t value);
 
   protected:
-
-    // The AD5680 needs just 16 bits of data so it needs to be shifted to left left by 4 bits
+    // The two LSBs are don't care bits, so we need to shift all values
     static const uint32_t DAC_REGSISTER_VALUE_OFFSET = 2;
-	static const uint32_t RESERVED_BITS = 0b0000 << 20;
-
-
-    //void writeSPI(uint32_t value);
-
-    uint8_t cs_pin;   // The ~Chip select pin used to address the DAC
-    //int16_t ldac_pin;   // The ~LDAC select pin used to address the DAC
-   
+    uint8_t cs_pin;   // The ~CS pin used to address the DAC
+    SPIClass* spi;
     SPISettings spi_settings;
 };
-
 #endif
+
