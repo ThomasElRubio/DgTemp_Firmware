@@ -10,12 +10,19 @@
 #define CS_AD5760              8
 #define CS_AD5680              7
 #define SETPOINT            300000000
-static double const KU                 = 0.00091125;      //0.0005*2*5*0.5*0.5*0.9*0.9*0.9;
+static double const KU                 = 0.00091125 * 64;      //0.0005*2*5*0.5*0.5*0.9*0.9*0.9;
 static double const TU                 = 65.0;
 static double const SAMPLING_FREQUENCY = 61.0;
-static double const KP                 = 0.000379 * 64;
+// Pessen Integral of Absolute Error
+static double const KP                 = KU * 0.7;
+static double const KI                 = KP / (TU / 2.5) / SAMPLING_FREQUENCY;
+static double const KD                 = KP * (0.15 * TU) * SAMPLING_FREQUENCY;
+
+/*
+static double const KP                 = 0.000379 * 64;   // KU * 0.2
 static double const KI                 = 0.00000005976143046459762 * 64;     //KP * 2.0 / TU / SAMPLING_FREQUENCY;
 static double const KD                 = 0.0003782486590412 * 64;     //KP * TU * SAMPLING_FREQUENCY / 3.0;
+*/
 #define QN                  20
 AD5760 dac(CS_AD5760);
 AD5680 pidDac(CS_AD5680, &SPI);
