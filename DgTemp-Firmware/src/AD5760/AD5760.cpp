@@ -26,7 +26,6 @@ void AD5760::writeSPI(uint32_t value) {
   SPI.beginTransaction(this->spi_settings);
 
   digitalWrite (this->cs_pin, LOW);
-  delayMicroseconds(10);
   
   #ifdef ARDUINO_AD5762R_DEBUG
   Serial.print("Writing to SPI:");
@@ -34,14 +33,10 @@ void AD5760::writeSPI(uint32_t value) {
   #endif
   
   SPI.transfer((value >> 16) & 0xFF);
-  delayMicroseconds(4);
   SPI.transfer((value >> 8) & 0xFF);
-  delayMicroseconds(4);
   SPI.transfer((value >> 0) & 0xFF);
-  delayMicroseconds(10);
 
   digitalWrite(this->cs_pin, HIGH);
-  delayMicroseconds(10);
   SPI.endTransaction();
 }
 
